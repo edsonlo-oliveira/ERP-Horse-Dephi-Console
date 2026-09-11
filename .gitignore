@@ -1,0 +1,102 @@
+# Delphi - arquivos locais
+*.dproj.local
+*.identcache
+*.local
+*.tvsconfig
+
+# Delphi - arquivos compilados
+*.dcu
+*.dcuil
+*.exe
+*.dll
+*.bpl
+*.dcp
+*.rsm
+*.map
+*.tds
+
+# Pastas de saída
+Win32/
+Win64/
+Debug/
+Release/
+
+# Histórico automático do Delphi
+__history/
+
+# Arquivos temporários
+*.~*
+*.tmp
+*.bak
+*.log
+
+# Boss CLI
+boss.exe
+# Delphi - arquivos locais
+*.dproj.local
+*.identcache
+*.local
+*.tvsconfig
+
+# Delphi - arquivos compilados
+*.dcu
+*.dcuil
+*.exe
+*.dll
+*.bpl
+*.dcp
+*.rsm
+*.map
+*.tds
+
+# Pastas de saída
+Win32/
+Win64/
+Debug/
+Release/
+
+# Histórico automático do Delphi
+__history/
+
+# Arquivos temporários
+*.~*
+*.tmp
+*.bak
+*.log
+
+# Boss CLI
+boss.exe# Delphi - arquivos locais
+*.dproj.local
+*.identcache
+*.local
+*.tvsconfig
+
+# Delphi - arquivos compilados
+*.dcu
+*.dcuil
+*.exe
+*.dll
+*.bpl
+*.dcp
+*.rsm
+*.map
+*.tds
+
+# Pastas de saída
+Win32/
+Win64/
+Debug/
+Release/
+
+# Histórico automático do Delphi
+__history/
+
+# Arquivos temporários
+*.~*
+*.tmp
+*.bak
+*.log
+
+# Boss CLI
+boss.exe
+

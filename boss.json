@@ -1,0 +1,10 @@
+{
+	"name": "ERPServer_console",
+	"description": "",
+	"version": "1.0.0",
+	"homepage": "",
+	"mainsrc": "./src",
+	"browsingpath": "",
+	"projects": [],
+	"dependencies": {}
+}
