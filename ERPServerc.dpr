@@ -5,10 +5,10 @@ program ERPServerc;
 uses
   System.SysUtils,
   Horse,
-  uRoutes in 'src\Services\uRoutes.pas',
   uEntityService in 'src\Services\uEntityService.pas',
   uEntityRepository in 'src\Repositories\uEntityRepository.pas',
-  uEntityController in 'src\Controllers\uEntityController.pas';
+  uEntityController in 'src\Controllers\uEntityController.pas',
+  uRoutes in 'src\Routes\uRoutes.pas';
 
 begin
   try

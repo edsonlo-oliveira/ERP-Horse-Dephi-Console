@@ -1,0 +1,166 @@
+program Console;
+
+{$I HorseTestDefines.inc}
+
+{$IFNDEF TESTINSIGHT}
+{$APPTYPE CONSOLE}
+{$ENDIF}{$STRONGLINKTYPES ON}
+uses
+  Horse.Commons in '..\..\src\Horse.Commons.pas',
+  Horse.Constants in '..\..\src\Horse.Constants.pas',
+  Horse.Core.Group.Contract in '..\..\src\Horse.Core.Group.Contract.pas',
+  Horse.Core.Group in '..\..\src\Horse.Core.Group.pas',
+  Horse.Core in '..\..\src\Horse.Core.pas',
+  Horse.Core.Route.Contract in '..\..\src\Horse.Core.Route.Contract.pas',
+  Horse.Core.Route in '..\..\src\Horse.Core.Route.pas',
+  Horse.Core.RouterTree in '..\..\src\Horse.Core.RouterTree.pas',
+  Horse.Core.Router.Radix in '..\..\src\Horse.Core.Router.Radix.pas',
+  Horse.Exception in '..\..\src\Horse.Exception.pas',
+  Horse in '..\..\src\Horse.pas',
+  Horse.Instance in '..\..\src\Horse.Instance.pas',
+  Horse.Provider.Abstract in '..\..\src\Horse.Provider.Abstract.pas',
+  Horse.Provider.Apache in '..\..\src\Horse.Provider.Apache.pas',
+  Horse.Provider.CGI in '..\..\src\Horse.Provider.CGI.pas',
+  Horse.Provider.Console in '..\..\src\Horse.Provider.Console.pas',
+  Horse.Provider.Daemon in '..\..\src\Horse.Provider.Daemon.pas',
+  ThirdParty.Posix.Syslog in '..\..\src\ThirdParty.Posix.Syslog.pas',
+  Web.WebConst in '..\..\src\Web.WebConst.pas',
+  Horse.Provider.VCL in '..\..\src\Horse.Provider.VCL.pas',
+  Horse.Provider.ISAPI in '..\..\src\Horse.Provider.ISAPI.pas',
+  Horse.WebModule in '..\..\src\Horse.WebModule.pas' {HorseWebModule: TWebModule},
+  Horse.Proc in '..\..\src\Horse.Proc.pas',
+  {$IFDEF FPC}
+  Classes,
+  SysUtils,
+  {$ELSE}
+  System.Classes,
+  System.SysUtils,
+  {$ENDIF}
+  {$IFDEF TESTINSIGHT}
+  TestInsight.DUnitX,
+  {$ENDIF }
+  {$IFNDEF FPC}
+  DUnitX.Loggers.Console,
+  DUnitX.Loggers.Xml.NUnit,
+  {$ENDIF}
+  DUnitX.TestFramework,
+  Tests.Api.Console in 'tests\Tests.Api.Console.pas',
+  Controllers.Api in 'controllers\Controllers.Api.pas',
+  Tests.Horse.Commons in 'tests\Tests.Horse.Commons.pas',
+  Horse.Core.Param in '..\..\src\Horse.Core.Param.pas',
+  Horse.Core.Param.Header in '..\..\src\Horse.Core.Param.Header.pas',
+  Horse.Provider.IOHandleSSL in '..\..\src\Horse.Provider.IOHandleSSL.pas',
+  Tests.Horse.Core.Param in 'tests\Tests.Horse.Core.Param.pas',
+  Horse.Core.Param.Field in '..\..\src\Horse.Core.Param.Field.pas',
+  Horse.Request in '..\..\src\Horse.Request.pas',
+  Horse.Response in '..\..\src\Horse.Response.pas',
+  Horse.Core.Param.Config in '..\..\src\Horse.Core.Param.Config.pas',
+  Horse.Rtti.Helper in '..\..\src\Horse.Rtti.Helper.pas',
+  Horse.Rtti in '..\..\src\Horse.Rtti.pas',
+  Horse.Callback in '..\..\src\Horse.Callback.pas',
+  Horse.Core.RouterTree.NextCaller in '..\..\src\Horse.Core.RouterTree.NextCaller.pas',
+  Horse.Exception.Interrupted in '..\..\src\Horse.Exception.Interrupted.pas',
+  Horse.Core.WebSocket in '..\..\src\Horse.Core.WebSocket.pas',
+  Horse.Provider.Indy.WebSocket in '..\..\src\Horse.Provider.Indy.WebSocket.pas',
+  Horse.Provider.Socket.WebSocket in '..\..\src\Horse.Provider.Socket.WebSocket.pas',
+  Horse.Session in '..\..\src\Horse.Session.pas',
+  Horse.Core.Param.Field.Brackets in '..\..\src\Horse.Core.Param.Field.Brackets.pas',
+  Horse.Core.Files in '..\..\src\Horse.Core.Files.pas',
+  Tests.Horse.Core.Files in 'tests\Tests.Horse.Core.Files.pas',
+  Tests.AssertHelper in 'tests\Tests.AssertHelper.pas',
+  Tests.CleanupHelper in 'tests\Tests.CleanupHelper.pas',
+  Tests.Horse.Core.RouterTree in 'tests\Tests.Horse.Core.RouterTree.pas',
+  Tests.Horse.Core.Group in 'tests\Tests.Horse.Core.Group.pas',
+  {$IFNDEF FPC}
+  Tests.Horse.Core.Router.Radix in 'tests\Tests.Horse.Core.Router.Radix.pas',
+  {$ELSE}
+  Tests.Horse.Core.Router.Radix.FPC in 'tests\Tests.Horse.Core.Router.Radix.FPC.pas',
+  {$ENDIF}
+  Tests.Horse.Request.Recycle in 'tests\Tests.Horse.Request.Recycle.pas',
+  Tests.Horse.Core.Middleware in 'tests\Tests.Horse.Core.Middleware.pas',
+  Tests.Integration.Concurrency in 'tests\Tests.Integration.Concurrency.pas',
+  Tests.Integration.ErrorHandling in 'tests\Tests.Integration.ErrorHandling.pas',
+  Tests.Integration.HttpMethods in 'tests\Tests.Integration.HttpMethods.pas',
+  Tests.Integration.KeepAlive in 'tests\Tests.Integration.KeepAlive.pas',
+  Tests.Integration.LargePayload in 'tests\Tests.Integration.LargePayload.pas',
+  Tests.Integration.ReadTimeout in 'tests\Tests.Integration.ReadTimeout.pas',
+  Tests.Integration.Query in 'tests\Tests.Integration.Query.pas',
+  Tests.Integration.LifecycleHooks in 'tests\Tests.Integration.LifecycleHooks.pas',
+  Tests.Integration.GracefulShutdown in 'tests\Tests.Integration.GracefulShutdown.pas',
+  Tests.Integration.DependencyInjection in 'tests\Tests.Integration.DependencyInjection.pas',
+  Tests.Integration.MultiInstance in 'tests\Tests.Integration.MultiInstance.pas',
+  Tests.Integration.ServerLifecycle in 'tests\Tests.Integration.ServerLifecycle.pas',
+  Tests.Integration.Telemetry in 'tests\Tests.Integration.Telemetry.pas',
+  Tests.Integration.WebSocket in 'tests\Tests.Integration.WebSocket.pas',
+  Tests.Integration.AdvancedRouting in 'tests\Tests.Integration.AdvancedRouting.pas',
+  Tests.Integration.Streaming in 'tests\Tests.Integration.Streaming.pas',
+  {$IFDEF HORSE_PROVIDER_IOCP}
+  Tests.Horse.Provider.IOCP in 'tests\Tests.Horse.Provider.IOCP.pas',
+  {$ENDIF}
+  Horse.Mime in '..\..\src\Horse.Mime.pas',
+  Horse.Utils in '..\..\src\Horse.Utils.pas',
+  Horse.Provider.Config in '..\..\src\Horse.Provider.Config.pas',
+  Horse.Provider.IOHandleSSL.Contract in '..\..\src\Horse.Provider.IOHandleSSL.Contract.pas',
+  Horse.Core.MemoryBufferPool in '..\..\src\Horse.Core.MemoryBufferPool.pas',
+  Horse.Core.Regex in '..\..\src\Horse.Core.Regex.pas',
+  Tests.Horse.Core.MemoryBufferPool in 'tests\Tests.Horse.Core.MemoryBufferPool.pas',
+  Horse.Core.Protobuf.Rtti in '..\..\src\Horse.Core.Protobuf.Rtti.pas',
+  Horse.Core.Protobuf.Serializer in '..\..\src\Horse.Core.Protobuf.Serializer.pas',
+  Horse.Grpc.Codec in '..\..\src\Horse.Grpc.Codec.pas',
+  Tests.Horse.Core.Grpc in 'tests\Tests.Horse.Core.Grpc.pas';
+
+var
+  Runner: ITestRunner;
+  Results: IRunResults;
+  Logger: ITestLogger;
+  NunitLogger: ITestLogger;
+
+begin
+  {$IFDEF HORSE_PROVIDER_HTTPSYS}
+  ReportMemoryLeaksOnShutdown := False;
+  {$ELSE}
+  ReportMemoryLeaksOnShutdown := True;
+  {$ENDIF}
+  {$IFDEF HORSE_RADIX_ROUTER}
+  THorse.UseRadixRouter;
+  {$ENDIF}
+{$IFDEF TESTINSIGHT}
+  TestInsight.DUnitX.RunRegisteredTests;
+{$ELSE}
+  try
+    TDUnitX.CheckCommandLine;
+
+    Runner := TDUnitX.CreateRunner;
+    Runner.UseRTTI := False;
+    Runner.FailsOnNoAsserts := True;
+
+    {$IFNDEF FPC}
+    {$IF CompilerVersion >= 32.0}
+    if TDUnitX.Options.ConsoleMode <> TDunitXConsoleMode.Off then
+    begin
+      Logger := TDUnitXConsoleLogger.Create(TDUnitX.Options.ConsoleMode = TDunitXConsoleMode.Quiet);
+      Runner.AddLogger(Logger);
+    end;
+    {$ELSE}
+    Logger := TDUnitXConsoleLogger.Create(True);
+    Runner.AddLogger(Logger);
+    {$IFEND}
+
+    NunitLogger := TDUnitXXMLNUnitFileLogger.Create(TDUnitX.Options.XMLOutputFile);
+    Runner.AddLogger(NunitLogger);
+    {$ENDIF}
+
+    Results := Runner.Execute;
+    if (not Results.AllPassed) then
+      System.ExitCode := EXIT_ERRORS;
+
+    {$IFNDEF CI}
+      System.Write('Done.. press <Enter> key to quit.');
+      System.Readln;
+    {$ENDIF}
+  except
+    on E: Exception do
+      System.Writeln(E.ClassName, ': ', E.Message);
+  end;
+{$ENDIF}
+end.

@@ -106,10 +106,10 @@
         <DelphiCompile Include="$(MainSource)">
             <MainSource>MainSource</MainSource>
         </DelphiCompile>
-        <DCCReference Include="src\Services\uRoutes.pas"/>
         <DCCReference Include="src\Services\uEntityService.pas"/>
         <DCCReference Include="src\Repositories\uEntityRepository.pas"/>
         <DCCReference Include="src\Controllers\uEntityController.pas"/>
+        <DCCReference Include="src\Routes\uRoutes.pas"/>
         <BuildConfiguration Include="Base">
             <Key>Base</Key>
         </BuildConfiguration>
