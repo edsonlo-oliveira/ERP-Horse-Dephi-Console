@@ -14,6 +14,8 @@ type
       const ATaxId: string;
       const ALegalName: string;
       const ATradeName: string;
+      const AStateRegistration: string;
+      const AMunicipalRegistration: string;
       const AIsCustomer: Boolean;
       const AIsSupplier: Boolean;
       const AEmail: string;
@@ -28,6 +30,8 @@ type
       const ATaxId: string;
       const ALegalName: string;
       const ATradeName: string;
+      const AStateRegistration: string;
+      const AMunicipalRegistration: string;
       const AIsCustomer: Boolean;
       const AIsSupplier: Boolean;
       const AEmail: string;
@@ -47,6 +51,9 @@ uses
   System.SysUtils,
   uEntityRepository;
 
+//***************************************
+//* LIST
+//***************************************
 class function TEntityService.List: string;
 begin
   Result := TEntityRepository.List;
@@ -84,11 +91,16 @@ begin
   );
 end;
 
+//***************************************
+//* CREATE
+//***************************************
 class function TEntityService.Create(
   const AEntityType: string;
   const ATaxId: string;
   const ALegalName: string;
   const ATradeName: string;
+  const AStateRegistration: string;
+  const AMunicipalRegistration: string;
   const AIsCustomer: Boolean;
   const AIsSupplier: Boolean;
   const AEmail: string;
@@ -122,10 +134,12 @@ begin
   end;
 
   Result := TEntityRepository.Create(
-    EntityType,
+    Trim(AEntityType),
     Trim(ATaxId),
-    LegalName,
+    Trim(ALegalName),
     Trim(ATradeName),
+    Trim(AStateRegistration),
+    Trim(AMunicipalRegistration),
     AIsCustomer,
     AIsSupplier,
     Trim(AEmail),
@@ -134,12 +148,17 @@ begin
   );
 end;
 
+//***************************************
+//* UPDATE
+//***************************************
 class function TEntityService.Update(
   const AEntityUuid: string;
   const AEntityType: string;
   const ATaxId: string;
   const ALegalName: string;
   const ATradeName: string;
+  const AStateRegistration: string;
+  const AMunicipalRegistration: string;
   const AIsCustomer: Boolean;
   const AIsSupplier: Boolean;
   const AEmail: string;
@@ -200,10 +219,12 @@ begin
 
   Result := TEntityRepository.Update(
     GUIDToString(UUID),
-    EntityType,
+    Trim(AEntityType),
     Trim(ATaxId),
-    LegalName,
+    Trim(ALegalName),
     Trim(ATradeName),
+    Trim(AStateRegistration),
+    Trim(AMunicipalRegistration),
     AIsCustomer,
     AIsSupplier,
     Trim(AEmail),
@@ -212,6 +233,9 @@ begin
   );
 end;
 
+//***************************************
+//* SOFT DELETE
+//***************************************
 class function TEntityService.Delete(
   const AEntityUuid: string;
   out AValidUuid: Boolean
@@ -244,6 +268,9 @@ begin
   );
 end;
 
+//***************************************
+//* HARD DELETE
+//***************************************
 class function TEntityService.HardDelete(
   const AEntityUuid: string;
   out AValidUuid: Boolean;

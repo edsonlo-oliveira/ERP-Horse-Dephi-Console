@@ -13,6 +13,8 @@ type
       const ATaxId: string;
       const ALegalName: string;
       const ATradeName: string;
+      const AStateRegistration: string;
+      const AMunicipalRegistration: string;
       const AIsCustomer: Boolean;
       const AIsSupplier: Boolean;
       const AEmail: string;
@@ -26,6 +28,8 @@ type
       const ATaxId: string;
       const ALegalName: string;
       const ATradeName: string;
+      const AStateRegistration: string;
+      const AMunicipalRegistration: string;
       const AIsCustomer: Boolean;
       const AIsSupplier: Boolean;
       const AEmail: string;
@@ -50,6 +54,9 @@ const
   // TEMPORÁRIO: será substituído pelo tenant do usuário autenticado.
   TEST_TENANT_ID: Int64 = 3;
 
+//***************************************
+//* LIST
+//***************************************
 class function TEntityRepository.List: string;
 var
   Query: TFDQuery;
@@ -255,6 +262,9 @@ begin
   end;
 end;
 
+//***************************************
+//* GETBYUUID
+//***************************************
 class function TEntityRepository.GetByUuid(
   const AEntityUuid: string
 ): string;
@@ -263,6 +273,8 @@ var
   JSONObject: TJSONObject;
   EntityUuid: string;
 begin
+  Result := '';
+
   EntityUuid := StringReplace(
     Trim(AEntityUuid),
     '{',
@@ -283,12 +295,24 @@ begin
 
     Query.SQL.Text :=
       'SELECT ' +
+      '    entity_id, ' +
       '    entity_uuid::text AS entity_uuid, ' +
+      '    tenant_id, ' +
       '    entity_type, ' +
+      '    tax_id, ' +
       '    legal_name, ' +
       '    trade_name, ' +
+      '    state_registration, ' +
+      '    municipal_registration, ' +
       '    is_customer, ' +
-      '    is_supplier ' +
+      '    is_supplier, ' +
+      '    email, ' +
+      '    phone, ' +
+      '    mobile_phone, ' +
+      '    active, ' +
+      '    created_at, ' +
+      '    updated_at, ' +
+      '    deleted_at ' +
       'FROM master.entities ' +
       'WHERE entity_uuid = CAST(:entity_uuid AS uuid) ' +
       '  AND tenant_id = :tenant_id ' +
@@ -300,19 +324,44 @@ begin
     Query.Open;
 
     if Query.Eof then
-      Exit('');
+      Exit;
 
     JSONObject := TJSONObject.Create;
     try
+      JSONObject.AddPair(
+        'entity_id',
+        TJSONNumber.Create(
+          Query.FieldByName('entity_id').AsLargeInt
+        )
+      );
+
       JSONObject.AddPair(
         'entity_uuid',
         Query.FieldByName('entity_uuid').AsString
       );
 
       JSONObject.AddPair(
+        'tenant_id',
+        TJSONNumber.Create(
+          Query.FieldByName('tenant_id').AsLargeInt
+        )
+      );
+
+      JSONObject.AddPair(
         'entity_type',
         Query.FieldByName('entity_type').AsString
       );
+
+      if Query.FieldByName('tax_id').IsNull then
+        JSONObject.AddPair(
+          'tax_id',
+          TJSONNull.Create
+        )
+      else
+        JSONObject.AddPair(
+          'tax_id',
+          Query.FieldByName('tax_id').AsString
+        );
 
       JSONObject.AddPair(
         'legal_name',
@@ -330,6 +379,28 @@ begin
           Query.FieldByName('trade_name').AsString
         );
 
+      if Query.FieldByName('state_registration').IsNull then
+        JSONObject.AddPair(
+          'state_registration',
+          TJSONNull.Create
+        )
+      else
+        JSONObject.AddPair(
+          'state_registration',
+          Query.FieldByName('state_registration').AsString
+        );
+
+      if Query.FieldByName('municipal_registration').IsNull then
+        JSONObject.AddPair(
+          'municipal_registration',
+          TJSONNull.Create
+        )
+      else
+        JSONObject.AddPair(
+          'municipal_registration',
+          Query.FieldByName('municipal_registration').AsString
+        );
+
       JSONObject.AddPair(
         'is_customer',
         TJSONBool.Create(
@@ -343,6 +414,67 @@ begin
           Query.FieldByName('is_supplier').AsBoolean
         )
       );
+
+      if Query.FieldByName('email').IsNull then
+        JSONObject.AddPair(
+          'email',
+          TJSONNull.Create
+        )
+      else
+        JSONObject.AddPair(
+          'email',
+          Query.FieldByName('email').AsString
+        );
+
+      if Query.FieldByName('phone').IsNull then
+        JSONObject.AddPair(
+          'phone',
+          TJSONNull.Create
+        )
+      else
+        JSONObject.AddPair(
+          'phone',
+          Query.FieldByName('phone').AsString
+        );
+
+      if Query.FieldByName('mobile_phone').IsNull then
+        JSONObject.AddPair(
+          'mobile_phone',
+          TJSONNull.Create
+        )
+      else
+        JSONObject.AddPair(
+          'mobile_phone',
+          Query.FieldByName('mobile_phone').AsString
+        );
+
+      JSONObject.AddPair(
+        'active',
+        TJSONBool.Create(
+          Query.FieldByName('active').AsBoolean
+        )
+      );
+
+      JSONObject.AddPair(
+        'created_at',
+        Query.FieldByName('created_at').AsString
+      );
+
+      JSONObject.AddPair(
+        'updated_at',
+        Query.FieldByName('updated_at').AsString
+      );
+
+      if Query.FieldByName('deleted_at').IsNull then
+        JSONObject.AddPair(
+          'deleted_at',
+          TJSONNull.Create
+        )
+      else
+        JSONObject.AddPair(
+          'deleted_at',
+          Query.FieldByName('deleted_at').AsString
+        );
 
       Result := JSONObject.ToJSON;
 
@@ -355,11 +487,16 @@ begin
   end;
 end;
 
+//***************************************
+//* CREATE
+//***************************************
 class function TEntityRepository.Create(
   const AEntityType: string;
   const ATaxId: string;
   const ALegalName: string;
   const ATradeName: string;
+  const AStateRegistration: string;
+  const AMunicipalRegistration: string;
   const AIsCustomer: Boolean;
   const AIsSupplier: Boolean;
   const AEmail: string;
@@ -368,124 +505,204 @@ class function TEntityRepository.Create(
 ): string;
 var
   Query: TFDQuery;
-  Json: TJSONObject;
+  JSONObject: TJSONObject;
 begin
+  Result := '';
+
   Query := TFDQuery.Create(nil);
   try
     Query.Connection := TApiDatabase.Connection;
 
     Query.SQL.Text :=
       'INSERT INTO master.entities (' +
-      '    tenant_id, ' +
-      '    entity_type, ' +
-      '    tax_id, ' +
-      '    legal_name, ' +
-      '    trade_name, ' +
-      '    is_customer, ' +
-      '    is_supplier, ' +
-      '    email, ' +
-      '    phone, ' +
-      '    mobile_phone' +
+        'tenant_id, ' +
+        'entity_type, ' +
+        'tax_id, ' +
+        'legal_name, ' +
+        'trade_name, ' +
+        'state_registration, ' +
+        'municipal_registration, ' +
+        'is_customer, ' +
+        'is_supplier, ' +
+        'email, ' +
+        'phone, ' +
+        'mobile_phone' +
       ') VALUES (' +
-      '    :tenant_id, ' +
-      '    :entity_type, ' +
-      '    :tax_id, ' +
-      '    :legal_name, ' +
-      '    :trade_name, ' +
-      '    :is_customer, ' +
-      '    :is_supplier, ' +
-      '    :email, ' +
-      '    :phone, ' +
-      '    :mobile_phone' +
+        ':tenant_id, ' +
+        ':entity_type, ' +
+        ':tax_id, ' +
+        ':legal_name, ' +
+        ':trade_name, ' +
+        ':state_registration, ' +
+        ':municipal_registration, ' +
+        ':is_customer, ' +
+        ':is_supplier, ' +
+        ':email, ' +
+        ':phone, ' +
+        ':mobile_phone' +
       ') ' +
       'RETURNING ' +
-      '    entity_uuid::text AS entity_uuid, ' +
-      '    entity_type, ' +
-      '    tax_id, ' +
-      '    legal_name, ' +
-      '    trade_name, ' +
-      '    is_customer, ' +
-      '    is_supplier, ' +
-      '    email, ' +
-      '    phone, ' +
-      '    mobile_phone';
+        'entity_id, ' +
+        'entity_uuid::text AS entity_uuid, ' +
+        'tenant_id, ' +
+        'entity_type, ' +
+        'tax_id, ' +
+        'legal_name, ' +
+        'trade_name, ' +
+        'state_registration, ' +
+        'municipal_registration, ' +
+        'is_customer, ' +
+        'is_supplier, ' +
+        'email, ' +
+        'phone, ' +
+        'mobile_phone, ' +
+        'active, ' +
+        'created_at, ' +
+        'updated_at, ' +
+        'deleted_at';
 
-    Query.ParamByName('tenant_id').AsLargeInt := TEST_TENANT_ID;
-    Query.ParamByName('entity_type').AsString := AEntityType;
+    Query.ParamByName('tenant_id').AsLargeInt :=
+      TEST_TENANT_ID;
+
+    Query.ParamByName('entity_type').AsString :=
+      AEntityType;
 
     if Trim(ATaxId) = '' then
       Query.ParamByName('tax_id').Clear
     else
-      Query.ParamByName('tax_id').AsString := ATaxId;
+      Query.ParamByName('tax_id').AsString :=
+        ATaxId;
 
-    Query.ParamByName('legal_name').AsString := ALegalName;
+    Query.ParamByName('legal_name').AsString :=
+      ALegalName;
 
     if Trim(ATradeName) = '' then
       Query.ParamByName('trade_name').Clear
     else
-      Query.ParamByName('trade_name').AsString := ATradeName;
+      Query.ParamByName('trade_name').AsString :=
+        ATradeName;
 
-    Query.ParamByName('is_customer').AsBoolean := AIsCustomer;
-    Query.ParamByName('is_supplier').AsBoolean := AIsSupplier;
+    Query.ParamByName('is_customer').AsBoolean :=
+      AIsCustomer;
+
+    Query.ParamByName('is_supplier').AsBoolean :=
+      AIsSupplier;
 
     if Trim(AEmail) = '' then
       Query.ParamByName('email').Clear
     else
-      Query.ParamByName('email').AsString := AEmail;
+      Query.ParamByName('email').AsString :=
+        AEmail;
 
     if Trim(APhone) = '' then
       Query.ParamByName('phone').Clear
     else
-      Query.ParamByName('phone').AsString := APhone;
+      Query.ParamByName('phone').AsString :=
+        APhone;
 
     if Trim(AMobilePhone) = '' then
       Query.ParamByName('mobile_phone').Clear
     else
-      Query.ParamByName('mobile_phone').AsString := AMobilePhone;
+      Query.ParamByName('mobile_phone').AsString :=
+        AMobilePhone;
+
+    if Trim(AStateRegistration) = '' then
+      Query.ParamByName('state_registration').Clear
+    else
+      Query.ParamByName('state_registration').AsString :=
+        AStateRegistration;
+
+    if Trim(AMunicipalRegistration) = '' then
+      Query.ParamByName('municipal_registration').Clear
+    else
+      Query.ParamByName('municipal_registration').AsString :=
+        AMunicipalRegistration;
 
     Query.Open;
 
-    Json := TJSONObject.Create;
+    JSONObject := TJSONObject.Create;
     try
-      Json.AddPair(
+      JSONObject.AddPair(
+        'entity_id',
+        TJSONNumber.Create(
+          Query.FieldByName('entity_id').AsLargeInt
+        )
+      );
+
+      JSONObject.AddPair(
         'entity_uuid',
         Query.FieldByName('entity_uuid').AsString
       );
 
-      Json.AddPair(
+      JSONObject.AddPair(
+        'tenant_id',
+        TJSONNumber.Create(
+          Query.FieldByName('tenant_id').AsLargeInt
+        )
+      );
+
+      JSONObject.AddPair(
         'entity_type',
         Query.FieldByName('entity_type').AsString
       );
 
       if Query.FieldByName('tax_id').IsNull then
-        Json.AddPair('tax_id', TJSONNull.Create)
+        JSONObject.AddPair(
+          'tax_id',
+          TJSONNull.Create
+        )
       else
-        Json.AddPair(
+        JSONObject.AddPair(
           'tax_id',
           Query.FieldByName('tax_id').AsString
         );
 
-      Json.AddPair(
+      JSONObject.AddPair(
         'legal_name',
         Query.FieldByName('legal_name').AsString
       );
 
       if Query.FieldByName('trade_name').IsNull then
-        Json.AddPair('trade_name', TJSONNull.Create)
+        JSONObject.AddPair(
+          'trade_name',
+          TJSONNull.Create
+        )
       else
-        Json.AddPair(
+        JSONObject.AddPair(
           'trade_name',
           Query.FieldByName('trade_name').AsString
         );
 
-      Json.AddPair(
+      if Query.FieldByName('state_registration').IsNull then
+        JSONObject.AddPair(
+          'state_registration',
+          TJSONNull.Create
+        )
+      else
+        JSONObject.AddPair(
+          'state_registration',
+          Query.FieldByName('state_registration').AsString
+        );
+
+      if Query.FieldByName('municipal_registration').IsNull then
+        JSONObject.AddPair(
+          'municipal_registration',
+          TJSONNull.Create
+        )
+      else
+        JSONObject.AddPair(
+          'municipal_registration',
+          Query.FieldByName('municipal_registration').AsString
+        );
+
+      JSONObject.AddPair(
         'is_customer',
         TJSONBool.Create(
           Query.FieldByName('is_customer').AsBoolean
         )
       );
 
-      Json.AddPair(
+      JSONObject.AddPair(
         'is_supplier',
         TJSONBool.Create(
           Query.FieldByName('is_supplier').AsBoolean
@@ -493,32 +710,70 @@ begin
       );
 
       if Query.FieldByName('email').IsNull then
-        Json.AddPair('email', TJSONNull.Create)
+        JSONObject.AddPair(
+          'email',
+          TJSONNull.Create
+        )
       else
-        Json.AddPair(
+        JSONObject.AddPair(
           'email',
           Query.FieldByName('email').AsString
         );
 
       if Query.FieldByName('phone').IsNull then
-        Json.AddPair('phone', TJSONNull.Create)
+        JSONObject.AddPair(
+          'phone',
+          TJSONNull.Create
+        )
       else
-        Json.AddPair(
+        JSONObject.AddPair(
           'phone',
           Query.FieldByName('phone').AsString
         );
 
       if Query.FieldByName('mobile_phone').IsNull then
-        Json.AddPair('mobile_phone', TJSONNull.Create)
+        JSONObject.AddPair(
+          'mobile_phone',
+          TJSONNull.Create
+        )
       else
-        Json.AddPair(
+        JSONObject.AddPair(
           'mobile_phone',
           Query.FieldByName('mobile_phone').AsString
         );
 
-      Result := Json.ToJSON;
+      JSONObject.AddPair(
+        'active',
+        TJSONBool.Create(
+          Query.FieldByName('active').AsBoolean
+        )
+      );
+
+      JSONObject.AddPair(
+        'created_at',
+        Query.FieldByName('created_at').AsString
+      );
+
+      JSONObject.AddPair(
+        'updated_at',
+        Query.FieldByName('updated_at').AsString
+      );
+
+      if Query.FieldByName('deleted_at').IsNull then
+        JSONObject.AddPair(
+          'deleted_at',
+          TJSONNull.Create
+        )
+      else
+        JSONObject.AddPair(
+          'deleted_at',
+          Query.FieldByName('deleted_at').AsString
+        );
+
+      Result := JSONObject.ToJSON;
+
     finally
-      Json.Free;
+      JSONObject.Free;
     end;
 
   finally
@@ -526,12 +781,17 @@ begin
   end;
 end;
 
+//***************************************
+//* UPDATE
+//***************************************
 class function TEntityRepository.Update(
   const AEntityUuid: string;
   const AEntityType: string;
   const ATaxId: string;
   const ALegalName: string;
   const ATradeName: string;
+  const AStateRegistration: string;
+  const AMunicipalRegistration: string;
   const AIsCustomer: Boolean;
   const AIsSupplier: Boolean;
   const AEmail: string;
@@ -540,123 +800,199 @@ class function TEntityRepository.Update(
 ): string;
 var
   Query: TFDQuery;
-  Json: TJSONObject;
+  JSONObject: TJSONObject;
 begin
+  Result := '';
+
   Query := TFDQuery.Create(nil);
   try
     Query.Connection := TApiDatabase.Connection;
 
-    Query.SQL.Text :=
-      'UPDATE master.entities SET ' +
-      '    entity_type = :entity_type, ' +
-      '    tax_id = :tax_id, ' +
-      '    legal_name = :legal_name, ' +
-      '    trade_name = :trade_name, ' +
-      '    is_customer = :is_customer, ' +
-      '    is_supplier = :is_supplier, ' +
-      '    email = :email, ' +
-      '    phone = :phone, ' +
-      '    mobile_phone = :mobile_phone, ' +
-      '    updated_at = CURRENT_TIMESTAMP ' +
-      'WHERE entity_uuid = CAST(:entity_uuid AS uuid) ' +
-      '  AND tenant_id = :tenant_id ' +
-      '  AND deleted_at IS NULL ' +
-      'RETURNING ' +
-      '    entity_uuid::text AS entity_uuid, ' +
-      '    entity_type, ' +
-      '    tax_id, ' +
-      '    legal_name, ' +
-      '    trade_name, ' +
-      '    is_customer, ' +
-      '    is_supplier, ' +
-      '    email, ' +
-      '    phone, ' +
-      '    mobile_phone';
+  Query.SQL.Text :=
+    'UPDATE master.entities SET ' +
+    '    entity_type = :entity_type, ' +
+    '    tax_id = :tax_id, ' +
+    '    legal_name = :legal_name, ' +
+    '    trade_name = :trade_name, ' +
+    '    state_registration = :state_registration, ' +
+    '    municipal_registration = :municipal_registration, ' +
+    '    is_customer = :is_customer, ' +
+    '    is_supplier = :is_supplier, ' +
+    '    email = :email, ' +
+    '    phone = :phone, ' +
+    '    mobile_phone = :mobile_phone, ' +
+    '    updated_at = CURRENT_TIMESTAMP ' +
+    'WHERE entity_uuid = CAST(:entity_uuid AS uuid) ' +
+    '  AND tenant_id = :tenant_id ' +
+    '  AND deleted_at IS NULL ' +
+    'RETURNING ' +
+    '    entity_id, ' +
+    '    entity_uuid::text AS entity_uuid, ' +
+    '    tenant_id, ' +
+    '    entity_type, ' +
+    '    tax_id, ' +
+    '    legal_name, ' +
+    '    trade_name, ' +
+    '    state_registration, ' +
+    '    municipal_registration, ' +
+    '    is_customer, ' +
+    '    is_supplier, ' +
+    '    email, ' +
+    '    phone, ' +
+    '    mobile_phone, ' +
+    '    active, ' +
+    '    created_at, ' +
+    '    updated_at, ' +
+    '    deleted_at';
 
-    Query.ParamByName('entity_uuid').AsString := AEntityUuid;
-    Query.ParamByName('tenant_id').AsLargeInt := TEST_TENANT_ID;
+    Query.ParamByName('entity_uuid').AsString :=
+      AEntityUuid;
 
-    Query.ParamByName('entity_type').AsString := AEntityType;
+    Query.ParamByName('tenant_id').AsLargeInt :=
+      TEST_TENANT_ID;
+
+    Query.ParamByName('entity_type').AsString :=
+      AEntityType;
 
     if Trim(ATaxId) = '' then
       Query.ParamByName('tax_id').Clear
     else
-      Query.ParamByName('tax_id').AsString := ATaxId;
+      Query.ParamByName('tax_id').AsString :=
+        ATaxId;
 
-    Query.ParamByName('legal_name').AsString := ALegalName;
+    Query.ParamByName('legal_name').AsString :=
+      ALegalName;
 
     if Trim(ATradeName) = '' then
       Query.ParamByName('trade_name').Clear
     else
-      Query.ParamByName('trade_name').AsString := ATradeName;
+      Query.ParamByName('trade_name').AsString :=
+        ATradeName;
 
-    Query.ParamByName('is_customer').AsBoolean := AIsCustomer;
-    Query.ParamByName('is_supplier').AsBoolean := AIsSupplier;
+    Query.ParamByName('is_customer').AsBoolean :=
+      AIsCustomer;
+
+    Query.ParamByName('is_supplier').AsBoolean :=
+      AIsSupplier;
 
     if Trim(AEmail) = '' then
       Query.ParamByName('email').Clear
     else
-      Query.ParamByName('email').AsString := AEmail;
+      Query.ParamByName('email').AsString :=
+        AEmail;
 
     if Trim(APhone) = '' then
       Query.ParamByName('phone').Clear
     else
-      Query.ParamByName('phone').AsString := APhone;
+      Query.ParamByName('phone').AsString :=
+        APhone;
 
     if Trim(AMobilePhone) = '' then
       Query.ParamByName('mobile_phone').Clear
     else
-      Query.ParamByName('mobile_phone').AsString := AMobilePhone;
+      Query.ParamByName('mobile_phone').AsString :=
+        AMobilePhone;
+
+if Trim(AStateRegistration) = '' then
+  Query.ParamByName('state_registration').Clear
+else
+  Query.ParamByName('state_registration').AsString :=
+    AStateRegistration;
+
+if Trim(AMunicipalRegistration) = '' then
+  Query.ParamByName('municipal_registration').Clear
+else
+  Query.ParamByName('municipal_registration').AsString :=
+    AMunicipalRegistration;
 
     Query.Open;
 
     if Query.Eof then
-    begin
-      Result := '';
       Exit;
-    end;
 
-    Json := TJSONObject.Create;
+    JSONObject := TJSONObject.Create;
     try
-      Json.AddPair(
+      JSONObject.AddPair(
+        'entity_id',
+        TJSONNumber.Create(
+          Query.FieldByName('entity_id').AsLargeInt
+        )
+      );
+
+      JSONObject.AddPair(
         'entity_uuid',
         Query.FieldByName('entity_uuid').AsString
       );
 
-      Json.AddPair(
+      JSONObject.AddPair(
+        'tenant_id',
+        TJSONNumber.Create(
+          Query.FieldByName('tenant_id').AsLargeInt
+        )
+      );
+
+      JSONObject.AddPair(
         'entity_type',
         Query.FieldByName('entity_type').AsString
       );
 
       if Query.FieldByName('tax_id').IsNull then
-        Json.AddPair('tax_id', TJSONNull.Create)
+        JSONObject.AddPair(
+          'tax_id',
+          TJSONNull.Create
+        )
       else
-        Json.AddPair(
+        JSONObject.AddPair(
           'tax_id',
           Query.FieldByName('tax_id').AsString
         );
 
-      Json.AddPair(
+      JSONObject.AddPair(
         'legal_name',
         Query.FieldByName('legal_name').AsString
       );
 
       if Query.FieldByName('trade_name').IsNull then
-        Json.AddPair('trade_name', TJSONNull.Create)
+        JSONObject.AddPair(
+          'trade_name',
+          TJSONNull.Create
+        )
       else
-        Json.AddPair(
+        JSONObject.AddPair(
           'trade_name',
           Query.FieldByName('trade_name').AsString
         );
 
-      Json.AddPair(
+      if Query.FieldByName('state_registration').IsNull then
+        JSONObject.AddPair(
+          'state_registration',
+          TJSONNull.Create
+        )
+      else
+        JSONObject.AddPair(
+          'state_registration',
+          Query.FieldByName('state_registration').AsString
+        );
+
+      if Query.FieldByName('municipal_registration').IsNull then
+        JSONObject.AddPair(
+          'municipal_registration',
+          TJSONNull.Create
+        )
+      else
+        JSONObject.AddPair(
+          'municipal_registration',
+          Query.FieldByName('municipal_registration').AsString
+        );
+
+      JSONObject.AddPair(
         'is_customer',
         TJSONBool.Create(
           Query.FieldByName('is_customer').AsBoolean
         )
       );
 
-      Json.AddPair(
+      JSONObject.AddPair(
         'is_supplier',
         TJSONBool.Create(
           Query.FieldByName('is_supplier').AsBoolean
@@ -664,32 +1000,70 @@ begin
       );
 
       if Query.FieldByName('email').IsNull then
-        Json.AddPair('email', TJSONNull.Create)
+        JSONObject.AddPair(
+          'email',
+          TJSONNull.Create
+        )
       else
-        Json.AddPair(
+        JSONObject.AddPair(
           'email',
           Query.FieldByName('email').AsString
         );
 
       if Query.FieldByName('phone').IsNull then
-        Json.AddPair('phone', TJSONNull.Create)
+        JSONObject.AddPair(
+          'phone',
+          TJSONNull.Create
+        )
       else
-        Json.AddPair(
+        JSONObject.AddPair(
           'phone',
           Query.FieldByName('phone').AsString
         );
 
       if Query.FieldByName('mobile_phone').IsNull then
-        Json.AddPair('mobile_phone', TJSONNull.Create)
+        JSONObject.AddPair(
+          'mobile_phone',
+          TJSONNull.Create
+        )
       else
-        Json.AddPair(
+        JSONObject.AddPair(
           'mobile_phone',
           Query.FieldByName('mobile_phone').AsString
         );
 
-      Result := Json.ToJSON;
+      JSONObject.AddPair(
+        'active',
+        TJSONBool.Create(
+          Query.FieldByName('active').AsBoolean
+        )
+      );
+
+      JSONObject.AddPair(
+        'created_at',
+        Query.FieldByName('created_at').AsString
+      );
+
+      JSONObject.AddPair(
+        'updated_at',
+        Query.FieldByName('updated_at').AsString
+      );
+
+      if Query.FieldByName('deleted_at').IsNull then
+        JSONObject.AddPair(
+          'deleted_at',
+          TJSONNull.Create
+        )
+      else
+        JSONObject.AddPair(
+          'deleted_at',
+          Query.FieldByName('deleted_at').AsString
+        );
+
+      Result := JSONObject.ToJSON;
+
     finally
-      Json.Free;
+      JSONObject.Free;
     end;
 
   finally
@@ -697,6 +1071,9 @@ begin
   end;
 end;
 
+//***************************************
+//* SOFT DELETE
+//***************************************
 class function TEntityRepository.Delete(const AEntityUuid: string): Boolean;
 var
   Query: TFDQuery;
@@ -727,6 +1104,9 @@ begin
   end;
 end;
 
+//***************************************
+//* HARD DELETE
+//***************************************
 class function TEntityRepository.HardDelete(
   const AEntityUuid: string;
   out AHasDependencies: Boolean
