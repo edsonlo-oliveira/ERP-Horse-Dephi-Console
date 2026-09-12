@@ -1,5 +1,8 @@
 program ERPServerc;
 {$APPTYPE CONSOLE}
+{$R *.res} // Essa é a padrão do Delphi, mantenha
+{$R 'Recursos.res' 'Recursos.rc'} // Adicione esta linha! Ela compila o seu .rc em .res e embute no EXE
+
 uses
   System.SysUtils,
   System.Classes,
@@ -20,6 +23,9 @@ uses
   uApiDatabase in 'src\Data\uApiDatabase.pas';
 begin
   try
+    //Título da aplicação da janela da console
+    SetConsoleTitle('Sistema de ERP - Server');
+
     // Ignora o CTRL+C e outros sinais de interrupção do console
     // no Windows
     SetConsoleCtrlHandler(nil, True);
