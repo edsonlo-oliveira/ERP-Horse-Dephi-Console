@@ -1,27 +1,37 @@
 program ERPServerc;
-
 {$APPTYPE CONSOLE}
-
 uses
   System.SysUtils,
   System.Classes,
-  Winapi.Windows, // Necessário para manipular os eventos do console no Windows
+  Winapi.Windows,
+  FireDAC.Stan.Intf,
+  FireDAC.Stan.Def,
+  FireDAC.Stan.Async,
+  FireDAC.DApt,
+  FireDAC.Comp.Client,
+  FireDAC.Phys,
+  FireDAC.Phys.PG,
+  FireDAC.Phys.PGDef,
   Horse,
   uEntityService in 'src\Services\uEntityService.pas',
   uEntityRepository in 'src\Repositories\uEntityRepository.pas',
   uEntityController in 'src\Controllers\uEntityController.pas',
-  uRoutes in 'src\Routes\uRoutes.pas';
-
+  uRoutes in 'src\Routes\uRoutes.pas',
+  uApiDatabase in 'src\Data\uApiDatabase.pas';
 begin
   try
-    // Ignora o CTRL+C e outros sinais de interrupção do console no Windows
+    // Ignora o CTRL+C e outros sinais de interrupção do console
+    // no Windows
     SetConsoleCtrlHandler(nil, True);
-
-    Writeln('Sistema de ERP - Server (64 Bit) (Release Beta 1 for Windows/64) ', FormatDateTime('dd-mm-yyyy hh:nn:ss', Now));
+    Writeln('Sistema de ERP - Server (64 Bit) (Release Beta 1 for Windows/64) ' + FormatDateTime('dd-mm-yyyy hh:nn:ss', Now));
     Writeln('');
 
+    // Inicializa a conexão com o PostgreSQL
+    TApiDatabase.Initialize;
+    TApiDatabase.Connection.Connected := True;
+    Writeln('Conexao com Banco de Dados estabelecida com sucesso.');
+    Writeln('');
     RegisterRoutes;
-
     TThread.CreateAnonymousThread(
       procedure
       var
@@ -30,7 +40,6 @@ begin
         while True do
         begin
           Readln(Comando);
-
           if LowerCase(Trim(Comando)) = 'quit' then
           begin
             Writeln('Encerrando o servidor...');
@@ -39,18 +48,22 @@ begin
           end
           else
           begin
-            Writeln('Comando não reconhecido. Digite "quit" para sair.');
+            Writeln(
+              'Comando nao reconhecido. ' +
+              'Digite "quit" para sair.'
+            );
           end;
         end;
-      end).Start;
-
-    THorse.Listen(9000,
-    procedure
-    begin
-      Writeln('Servidor rodando na porta 9000.');
-      Writeln('Digite "quit" e pressione ENTER para sair.');
-    end);
-
+      end
+    ).Start;
+    THorse.Listen(
+      9000,
+      procedure
+      begin
+        Writeln('Servidor rodando na porta 9000.');
+        Writeln('Digite "quit" e pressione ENTER para sair.');
+      end
+    );
   except
     on E: Exception do
     begin
@@ -58,5 +71,6 @@ begin
       Readln;
     end;
   end;
+  // Libera os recursos da conexão com o banco
+  TApiDatabase.Finalize;
 end.
-

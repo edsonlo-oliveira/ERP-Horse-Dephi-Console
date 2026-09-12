@@ -115,6 +115,7 @@
         <DCCReference Include="src\Repositories\uEntityRepository.pas"/>
         <DCCReference Include="src\Controllers\uEntityController.pas"/>
         <DCCReference Include="src\Routes\uRoutes.pas"/>
+        <DCCReference Include="src\Data\uApiDatabase.pas"/>
         <BuildConfiguration Include="Base">
             <Key>Base</Key>
         </BuildConfiguration>
