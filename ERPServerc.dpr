@@ -20,7 +20,9 @@ uses
   uEntityRepository in 'src\Repositories\uEntityRepository.pas',
   uEntityController in 'src\Controllers\uEntityController.pas',
   uRoutes in 'src\Routes\uRoutes.pas',
-  uApiDatabase in 'src\Data\uApiDatabase.pas';
+  uApiDatabase in 'src\Data\uApiDatabase.pas',
+  uTenantRepository in 'src\Repositories\uTenantRepository.pas';
+
 begin
   try
     //Título da aplicação da janela da console
