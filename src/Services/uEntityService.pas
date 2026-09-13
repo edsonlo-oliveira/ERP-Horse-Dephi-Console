@@ -59,6 +59,10 @@ begin
   Result := TEntityRepository.List;
 end;
 
+
+//***************************************
+//* GETBYUUID
+//***************************************
 class function TEntityService.GetByUuid(
   const AEntityUuid: string;
   out AValidUuid: Boolean

@@ -21,7 +21,9 @@ uses
   uEntityController in 'src\Controllers\uEntityController.pas',
   uRoutes in 'src\Routes\uRoutes.pas',
   uApiDatabase in 'src\Data\uApiDatabase.pas',
-  uTenantRepository in 'src\Repositories\uTenantRepository.pas';
+  uTenantRepository in 'src\Repositories\uTenantRepository.pas',
+  uTenantService in 'src\Services\uTenantService.pas',
+  uTenantController in 'src\Controllers\uTenantController.pas';
 
 begin
   try
