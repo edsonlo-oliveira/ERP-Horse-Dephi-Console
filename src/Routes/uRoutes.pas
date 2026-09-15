@@ -9,7 +9,8 @@ implementation
 uses
   Horse,
   uEntityController,
-  uTenantController;
+  uTenantController,
+  uUserController;
 
 procedure RegisterRoutes;
 begin
@@ -73,6 +74,16 @@ begin
     '/api/v1/tenants/:uuid',
     TTenantController.Delete
   );
+
+  //***************************************
+  //* Users
+  //***************************************
+  THorse.Get('/api/v1/users', TUserController.List);
+  THorse.Get('/api/v1/users/:uuid', TUserController.GetByUuid);
+  THorse.Post('/api/v1/users', TUserController.Create);
+  THorse.Put('/api/v1/users/:uuid', TUserController.Update);
+  THorse.Delete('/api/v1/users/:uuid', TUserController.Delete);
 end;
+
 
 end.

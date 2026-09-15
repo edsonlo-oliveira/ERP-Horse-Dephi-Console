@@ -23,7 +23,11 @@ uses
   uApiDatabase in 'src\Data\uApiDatabase.pas',
   uTenantRepository in 'src\Repositories\uTenantRepository.pas',
   uTenantService in 'src\Services\uTenantService.pas',
-  uTenantController in 'src\Controllers\uTenantController.pas';
+  uTenantController in 'src\Controllers\uTenantController.pas',
+  uUserRepository in 'src\Repositories\uUserRepository.pas',
+  uUserService in 'src\Services\uUserService.pas',
+  uUserController in 'src\Controllers\uUserController.pas',
+  uPasswordUtils in 'src\Utils\uPasswordUtils.pas';
 
 begin
   try
@@ -47,6 +51,8 @@ begin
       var
         Comando: string;
       begin
+
+
         while True do
         begin
           Readln(Comando);
