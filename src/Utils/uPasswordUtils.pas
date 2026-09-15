@@ -5,7 +5,14 @@ interface
 uses
   System.SysUtils,
   System.Hash,
-  System.NetEncoding;
+  System.NetEncoding,
+  Winapi.Windows;
+
+const
+  BCRYPT_USE_SYSTEM_PREFERRED_RNG = $00000002;
+
+type
+  ESecureRandomError = class(Exception);
 
 function HashPassword(const APassword: string): string;
 function VerifyPassword(const APassword, AStoredHash: string): Boolean;
@@ -17,6 +24,9 @@ const
   SALT_SIZE = 16;
   HASH_SIZE = 32;
 
+//***************************************
+//* BYTESTOHEX
+//***************************************
 function BytesToHex(const ABytes: TBytes): string;
 const
   HexChars: array[0..15] of Char =
@@ -33,6 +43,9 @@ begin
   end;
 end;
 
+//***************************************
+//* HEXTOBYTES
+//***************************************
 function HexToBytes(const AHex: string): TBytes;
 var
   I: Integer;
@@ -52,16 +65,45 @@ begin
   end;
 end;
 
+//***************************************
+//* BCRYPTGENRANDOM
+//***************************************
+function BCryptGenRandom(
+  hAlgorithm: Pointer;
+  pbBuffer: PByte;
+  cbBuffer: Cardinal;
+  dwFlags: Cardinal
+): Cardinal; stdcall; external 'bcrypt.dll';
+
+//***************************************
+//* SECURERANDOMBYTES
+//***************************************
 function SecureRandomBytes(ASize: Integer): TBytes;
 var
-  I: Integer;
+  LStatus: Cardinal;
 begin
+  if ASize <= 0 then
+    Exit(nil);
+
   SetLength(Result, ASize);
 
-  for I := 0 to ASize - 1 do
-    Result[I] := Random(256);
+  LStatus := BCryptGenRandom(
+    nil,
+    @Result[0],
+    ASize,
+    BCRYPT_USE_SYSTEM_PREFERRED_RNG
+  );
+
+  if LStatus <> 0 then
+    raise ESecureRandomError.CreateFmt(
+      'Falha ao gerar bytes aleatórios criptograficamente seguros. NTSTATUS: 0x%.8x',
+      [LStatus]
+    );
 end;
 
+//***************************************
+//* HMACSHA256
+//***************************************
 function HMACSHA256(
   const AData, AKey: TBytes
 ): TBytes;
@@ -73,6 +115,9 @@ begin
   );
 end;
 
+//***************************************
+//* XORBYTES
+//***************************************
 function XorBytes(
   const A, B: TBytes
 ): TBytes;
@@ -90,6 +135,9 @@ begin
     Result[I] := A[I] xor B[I];
 end;
 
+//***************************************
+//* UINT32TOBYTES
+//***************************************
 function UInt32ToBytes(AValue: Cardinal): TBytes;
 begin
   SetLength(Result, 4);
@@ -100,6 +148,9 @@ begin
   Result[3] := Byte(AValue);
 end;
 
+//***************************************
+//* PBKDF2
+//***************************************
 function PBKDF2(
   const APassword, ASalt: TBytes;
   AIterations, ADerivedKeyLength: Integer
@@ -156,6 +207,9 @@ begin
   SetLength(Result, ADerivedKeyLength);
 end;
 
+//***************************************
+//* CONSTATTIMEEQUALS
+//***************************************
 function ConstantTimeEquals(
   const A, B: TBytes
 ): Boolean;
@@ -207,6 +261,9 @@ begin
     BytesToHex(DerivedKey);
 end;
 
+//***************************************
+//* VERIFYPASSWORD
+//***************************************
 function VerifyPassword(
   const APassword, AStoredHash: string
 ): Boolean;
