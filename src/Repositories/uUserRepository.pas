@@ -59,7 +59,11 @@ type
       const ATenantId: Int64;
       const AUserUuid: string
     ): Boolean;
-  end;
+
+    class function FindByLogin(
+      const ALoginId: string
+    ): string;
+    end;
 
 implementation
 
@@ -71,6 +75,9 @@ uses
   FireDAC.Stan.Param,
   uApiDatabase;
 
+//***************************************
+//* USERTOJSON
+//***************************************
 function UserToJson(AQuery: TFDQuery): TJSONObject;
 var
   LValue: TJSONValue;
@@ -592,6 +599,9 @@ begin
   end;
 end;
 
+//***************************************
+//* LOGINEXISTS
+//***************************************
 class function TUserRepository.LoginExists(
   const ALoginId: string;
   const AUserUuid: string
@@ -648,6 +658,9 @@ begin
   end;
 end;
 
+//***************************************
+//* EMAILEXISTS
+//***************************************
 class function TUserRepository.EmailExists(
   const ATenantId: Int64;
   const AEmail: string;
@@ -709,6 +722,9 @@ begin
   end;
 end;
 
+//***************************************
+//* SUPERUSEREXISTS
+//***************************************
 class function TUserRepository.SuperUserExists(
   const ATenantId: Int64;
   const AUserUuid: string
@@ -760,6 +776,100 @@ begin
     LQuery.Open;
 
     Result := LQuery.FieldByName('super_user_exists').AsBoolean;
+
+  finally
+    LQuery.Free;
+  end;
+end;
+
+//***************************************
+//* FINDBYLOGIN
+//***************************************
+class function TUserRepository.FindByLogin(
+  const ALoginId: string
+): string;
+var
+  LQuery: TFDQuery;
+  LJson: TJSONObject;
+begin
+  Result := '';
+
+  LQuery := TFDQuery.Create(nil);
+  try
+    LQuery.Connection := TApiDatabase.Connection;
+
+    LQuery.SQL.Text :=
+      'SELECT ' +
+      '  user_id, ' +
+      '  user_uuid, ' +
+      '  tenant_id, ' +
+      '  login_id, ' +
+      '  password_hash, ' +
+      '  status, ' +
+      '  super_user ' +
+      'FROM core.users ' +
+      'WHERE login_id = :login_id ' +
+      '  AND deleted_at IS NULL';
+
+    LQuery.ParamByName('login_id').DataType :=
+      ftString;
+
+    LQuery.ParamByName('login_id').AsString :=
+      Trim(ALoginId);
+
+    LQuery.Open;
+
+    if LQuery.Eof then
+      Exit;
+
+    LJson := TJSONObject.Create;
+    try
+      LJson.AddPair(
+        'user_id',
+        TJSONNumber.Create(
+          LQuery.FieldByName('user_id').AsLargeInt
+        )
+      );
+
+      LJson.AddPair(
+        'user_uuid',
+        LQuery.FieldByName('user_uuid').AsString
+      );
+
+      LJson.AddPair(
+        'tenant_id',
+        TJSONNumber.Create(
+          LQuery.FieldByName('tenant_id').AsLargeInt
+        )
+      );
+
+      LJson.AddPair(
+        'login_id',
+        LQuery.FieldByName('login_id').AsString
+      );
+
+      LJson.AddPair(
+        'password_hash',
+        LQuery.FieldByName('password_hash').AsString
+      );
+
+      LJson.AddPair(
+        'status',
+        LQuery.FieldByName('status').AsString
+      );
+
+      LJson.AddPair(
+        'super_user',
+        TJSONBool.Create(
+          LQuery.FieldByName('super_user').AsBoolean
+        )
+      );
+
+      Result := LJson.ToJSON;
+
+    finally
+      LJson.Free;
+    end;
 
   finally
     LQuery.Free;

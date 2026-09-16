@@ -27,7 +27,10 @@ uses
   uUserRepository in 'src\Repositories\uUserRepository.pas',
   uUserService in 'src\Services\uUserService.pas',
   uUserController in 'src\Controllers\uUserController.pas',
-  uPasswordUtils in 'src\Utils\uPasswordUtils.pas';
+  uPasswordUtils in 'src\Utils\uPasswordUtils.pas',
+  uAuthService in 'src\Services\uAuthService.pas',
+  uAuthController in 'src\Controllers\uAuthController.pas',
+  uJwtConfig in 'src\Utils\uJwtConfig.pas';
 
 begin
   try

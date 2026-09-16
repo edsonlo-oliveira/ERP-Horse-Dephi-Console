@@ -10,7 +10,8 @@ uses
   Horse,
   uEntityController,
   uTenantController,
-  uUserController;
+  uUserController,
+  uAuthController;
 
 procedure RegisterRoutes;
 begin
@@ -83,6 +84,11 @@ begin
   THorse.Post('/api/v1/users', TUserController.Create);
   THorse.Put('/api/v1/users/:uuid', TUserController.Update);
   THorse.Delete('/api/v1/users/:uuid', TUserController.Delete);
+
+  //***************************************
+  //* AUTHENTICATION
+  //***************************************
+  THorse.Post('/api/v1/auth/login', TAuthController.Login);
 end;
 
 
