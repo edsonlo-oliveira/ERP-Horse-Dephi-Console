@@ -30,7 +30,10 @@ uses
   uPasswordUtils in 'src\Utils\uPasswordUtils.pas',
   uAuthService in 'src\Services\uAuthService.pas',
   uAuthController in 'src\Controllers\uAuthController.pas',
-  uJwtConfig in 'src\Utils\uJwtConfig.pas';
+  uJwtConfig in 'src\Utils\uJwtConfig.pas',
+  uJwtService in 'src\Services\uJwtService.pas',
+  uJwtTest in 'src\Test\uJwtTest.pas',
+  uJwtMiddleware in 'src\Middleware\uJwtMiddleware.pas';
 
 begin
   try

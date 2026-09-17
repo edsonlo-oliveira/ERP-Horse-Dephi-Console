@@ -11,7 +11,8 @@ uses
   uEntityController,
   uTenantController,
   uUserController,
-  uAuthController;
+  uAuthController,
+  uJwtMiddleware;
 
 procedure RegisterRoutes;
 begin
@@ -20,6 +21,7 @@ begin
   //***************************************
   THorse.Get(
     '/api/v1/entities',
+    [JwtMiddleware],
     TEntityController.List
   );
 
@@ -53,6 +55,7 @@ begin
   //***************************************
   THorse.Get(
     '/api/v1/tenants',
+    [JwtMiddleware],
     TTenantController.List
   );
 

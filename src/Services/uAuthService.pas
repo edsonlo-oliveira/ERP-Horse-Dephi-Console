@@ -19,9 +19,13 @@ uses
   uUserRepository,
   uPasswordUtils,
   uApiDatabase,
+  uJwtService,
   FireDAC.Comp.Client,
   FireDAC.Stan.Param,
-  Data.DB;
+  Data.DB,
+  JOSE.Core.JWT,
+  JOSE.Core.Builder,
+  uJwtConfig;
 
 //***************************************
 //* LOGIN
@@ -42,6 +46,8 @@ var
   LStatus: string;
   LSuperUser: Boolean;
   LQuery: TFDQuery;
+  LToken: string;
+  LScope: string;
 begin
   if Trim(ALoginId) = '' then
     raise Exception.Create('Login é obrigatório.');
@@ -126,6 +132,21 @@ begin
       'WHERE user_id = :user_id ' +
       '  AND deleted_at IS NULL';
 
+    if LSuperUser then
+      LScope := 'GLOBAL'
+    else
+      LScope := 'TENANT';
+
+    LToken :=
+      TJwtService.GenerateToken(
+        LUserUuid,
+        LUserId,
+        LTenantId,
+        LLoginId,
+        LSuperUser,
+        LScope
+      );
+
     LQuery.ParamByName('user_id').DataType :=
       ftLargeint;
 
@@ -165,6 +186,10 @@ begin
       TJSONBool.Create(LSuperUser)
     );
 
+    LObject.AddPair(
+      'token',
+      LToken
+    );
     Result := LObject.ToJSON;
 
   finally
