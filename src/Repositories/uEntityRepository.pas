@@ -5,10 +5,11 @@ interface
 type
   TEntityRepository = class
   public
-    class function List: string;
-    class function GetByUuid(const AEntityUuid: string): string;
+    class function List(const ATenantID: Int64): string;
+    class function GetByUuid(const AEntityUuid: string; const ATenantID: Int64): string;
 
     class function Create(
+      const ATenantID: Int64;
       const AEntityType: string;
       const ATaxId: string;
       const ALegalName: string;
@@ -23,6 +24,7 @@ type
     ): string;
 
     class function Update(
+      const ATenantID: Int64;
       const AEntityUuid: string;
       const AEntityType: string;
       const ATaxId: string;
@@ -37,8 +39,8 @@ type
       const AMobilePhone: string
     ): string;
 
-    class function Delete(const AEntityUuid: string): Boolean;
-    class function HardDelete(const AEntityUuid: string; out AHasDependencies: Boolean): Boolean;
+    class function Delete(const ATenantID: Int64; const AEntityUuid: string): Boolean;
+    class function HardDelete(const ATenantID: Int64; const AEntityUuid: string; out AHasDependencies: Boolean): Boolean;
   end;
 
 implementation
@@ -50,14 +52,11 @@ uses
   FireDAC.Stan.Param,
   uApiDatabase;
 
-const
-  // TEMPORÁRIO: será substituído pelo tenant do usuário autenticado.
-  TEST_TENANT_ID: Int64 = 3;
-
 //***************************************
 //* LIST
 //***************************************
-class function TEntityRepository.List: string;
+
+class function TEntityRepository.List(const ATenantID: Int64): string;
 var
   Query: TFDQuery;
   JSONArray: TJSONArray;
@@ -93,7 +92,7 @@ begin
       '  AND deleted_at IS NULL ' +
       'ORDER BY legal_name';
 
-    Query.ParamByName('tenant_id').AsLargeInt := TEST_TENANT_ID;
+    Query.ParamByName('tenant_id').AsLargeInt := ATenantID;
 
     Query.Open;
 
@@ -266,7 +265,8 @@ end;
 //* GETBYUUID
 //***************************************
 class function TEntityRepository.GetByUuid(
-  const AEntityUuid: string
+  const AEntityUuid: string;
+  const ATenantID: Int64
 ): string;
 var
   Query: TFDQuery;
@@ -319,7 +319,7 @@ begin
       '  AND deleted_at IS NULL';
 
     Query.ParamByName('entity_uuid').AsString := EntityUuid;
-    Query.ParamByName('tenant_id').AsLargeInt := TEST_TENANT_ID;
+    Query.ParamByName('tenant_id').AsLargeInt := ATenantID;
 
     Query.Open;
 
@@ -491,6 +491,7 @@ end;
 //* CREATE
 //***************************************
 class function TEntityRepository.Create(
+  const ATenantID: Int64;
   const AEntityType: string;
   const ATaxId: string;
   const ALegalName: string;
@@ -562,7 +563,7 @@ begin
         'deleted_at';
 
     Query.ParamByName('tenant_id').AsLargeInt :=
-      TEST_TENANT_ID;
+      ATenantID;
 
     Query.ParamByName('entity_type').AsString :=
       AEntityType;
@@ -785,6 +786,7 @@ end;
 //* UPDATE
 //***************************************
 class function TEntityRepository.Update(
+  const ATenantID: Int64;
   const AEntityUuid: string;
   const AEntityType: string;
   const ATaxId: string;
@@ -849,7 +851,7 @@ begin
       AEntityUuid;
 
     Query.ParamByName('tenant_id').AsLargeInt :=
-      TEST_TENANT_ID;
+      ATenantID;
 
     Query.ParamByName('entity_type').AsString :=
       AEntityType;
@@ -1074,7 +1076,10 @@ end;
 //***************************************
 //* SOFT DELETE
 //***************************************
-class function TEntityRepository.Delete(const AEntityUuid: string): Boolean;
+class function TEntityRepository.Delete(
+  const ATenantID: Int64;
+  const AEntityUuid: string
+): Boolean;
 var
   Query: TFDQuery;
 begin
@@ -1093,7 +1098,7 @@ begin
       '  AND deleted_at IS NULL';
 
     Query.ParamByName('entity_uuid').AsString := AEntityUuid;
-    Query.ParamByName('tenant_id').AsLargeInt := TEST_TENANT_ID;
+    Query.ParamByName('tenant_id').AsLargeInt := ATenantID;
 
     Query.ExecSQL;
 
@@ -1108,6 +1113,7 @@ end;
 //* HARD DELETE
 //***************************************
 class function TEntityRepository.HardDelete(
+  const ATenantID: Int64;
   const AEntityUuid: string;
   out AHasDependencies: Boolean
 ): Boolean;
@@ -1130,7 +1136,7 @@ begin
       '  AND tenant_id = :tenant_id';
 
     Query.ParamByName('entity_uuid').AsString := AEntityUuid;
-    Query.ParamByName('tenant_id').AsLargeInt := TEST_TENANT_ID;
+    Query.ParamByName('tenant_id').AsLargeInt := ATenantID;
 
     Query.Open;
 
@@ -1148,7 +1154,7 @@ begin
       'WHERE tenant_id = :tenant_id ' +
       '  AND entity_id = :entity_id';
 
-    Query.ParamByName('tenant_id').AsLargeInt := TEST_TENANT_ID;
+    Query.ParamByName('tenant_id').AsLargeInt := ATenantID;
     Query.ParamByName('entity_id').AsLargeInt := EntityId;
 
     Query.Open;
@@ -1168,7 +1174,7 @@ begin
       '  AND tenant_id = :tenant_id';
 
     Query.ParamByName('entity_uuid').AsString := AEntityUuid;
-    Query.ParamByName('tenant_id').AsLargeInt := TEST_TENANT_ID;
+    Query.ParamByName('tenant_id').AsLargeInt := ATenantID;
 
     Query.ExecSQL;
 

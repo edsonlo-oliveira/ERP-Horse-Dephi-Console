@@ -33,7 +33,9 @@ uses
   uJwtConfig in 'src\Utils\uJwtConfig.pas',
   uJwtService in 'src\Services\uJwtService.pas',
   uJwtTest in 'src\Test\uJwtTest.pas',
-  uJwtMiddleware in 'src\Middleware\uJwtMiddleware.pas';
+  uJwtMiddleware in 'src\Middleware\uJwtMiddleware.pas',
+  uHttpAuthUtils in 'src\Utils\uHttpAuthUtils.pas',
+  uJwtRequestContext in 'src\Utils\uJwtRequestContext.pas';
 
 begin
   try

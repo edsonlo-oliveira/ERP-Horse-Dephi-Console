@@ -5,11 +5,11 @@ interface
 type
   TEntityService = class
   public
-    class function List: string;
-
-    class function GetByUuid(const AEntityUuid: string; out AValidUuid: Boolean): string;
+    class function List(const ATenantID: Int64): string;
+    class function GetByUuid(const AEntityUuid: string; const ATenantID: Int64; out AValidUuid: Boolean): string;
 
     class function Create(
+      const ATenantID: Int64;
       const AEntityType: string;
       const ATaxId: string;
       const ALegalName: string;
@@ -25,6 +25,7 @@ type
     ): string;
 
     class function Update(
+      const ATenantID: Int64;
       const AEntityUuid: string;
       const AEntityType: string;
       const ATaxId: string;
@@ -41,8 +42,8 @@ type
       out AErrorMessage: string
     ): string;
 
-    class function Delete(const AEntityUuid: string; out AValidUuid: Boolean): Boolean;
-    class function HardDelete(const AEntityUuid: string; out AValidUuid: Boolean; out AHasDependencies: Boolean): Boolean;
+    class function Delete(const AEntityUuid: string; const ATenantID: Int64; out AValidUuid: Boolean): Boolean;
+    class function HardDelete(const AEntityUuid: string; const ATenantID: Int64; out AValidUuid: Boolean; out AHasDependencies: Boolean): Boolean;
   end;
 
 implementation
@@ -54,9 +55,13 @@ uses
 //***************************************
 //* LIST
 //***************************************
-class function TEntityService.List: string;
+class function TEntityService.List(
+  const ATenantID: Int64
+): string;
 begin
-  Result := TEntityRepository.List;
+  Result := TEntityRepository.List(
+    ATenantID
+  );
 end;
 
 
@@ -65,6 +70,7 @@ end;
 //***************************************
 class function TEntityService.GetByUuid(
   const AEntityUuid: string;
+  const ATenantID: Int64;
   out AValidUuid: Boolean
 ): string;
 var
@@ -91,14 +97,17 @@ begin
   end;
 
   Result := TEntityRepository.GetByUuid(
-    GUIDToString(UUID)
+    GUIDToString(UUID),
+    ATenantID
   );
 end;
 
 //***************************************
 //* CREATE
 //***************************************
+
 class function TEntityService.Create(
+  const ATenantID: Int64;
   const AEntityType: string;
   const ATaxId: string;
   const ALegalName: string;
@@ -138,6 +147,7 @@ begin
   end;
 
   Result := TEntityRepository.Create(
+    ATenantID,
     Trim(AEntityType),
     Trim(ATaxId),
     Trim(ALegalName),
@@ -156,6 +166,7 @@ end;
 //* UPDATE
 //***************************************
 class function TEntityService.Update(
+  const ATenantID: Int64;
   const AEntityUuid: string;
   const AEntityType: string;
   const ATaxId: string;
@@ -222,18 +233,19 @@ begin
   end;
 
   Result := TEntityRepository.Update(
+    ATenantID,
     GUIDToString(UUID),
-    Trim(AEntityType),
-    Trim(ATaxId),
-    Trim(ALegalName),
-    Trim(ATradeName),
-    Trim(AStateRegistration),
-    Trim(AMunicipalRegistration),
+    AEntityType,
+    ATaxId,
+    ALegalName,
+    ATradeName,
+    AStateRegistration,
+    AMunicipalRegistration,
     AIsCustomer,
     AIsSupplier,
-    Trim(AEmail),
-    Trim(APhone),
-    Trim(AMobilePhone)
+    AEmail,
+    APhone,
+    AMobilePhone
   );
 end;
 
@@ -242,6 +254,7 @@ end;
 //***************************************
 class function TEntityService.Delete(
   const AEntityUuid: string;
+  const ATenantID: Int64;
   out AValidUuid: Boolean
 ): Boolean;
 var
@@ -268,6 +281,7 @@ begin
   end;
 
   Result := TEntityRepository.Delete(
+    ATenantID,
     GUIDToString(UUID)
   );
 end;
@@ -277,6 +291,7 @@ end;
 //***************************************
 class function TEntityService.HardDelete(
   const AEntityUuid: string;
+  const ATenantID: Int64;
   out AValidUuid: Boolean;
   out AHasDependencies: Boolean
 ): Boolean;
@@ -305,6 +320,7 @@ begin
   end;
 
   Result := TEntityRepository.HardDelete(
+    ATenantID,
     GUIDToString(UUID),
     AHasDependencies
   );

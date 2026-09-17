@@ -21,12 +21,14 @@ implementation
 uses
   System.SysUtils,
   System.JSON,
-  uEntityService;
+  uEntityService,
+  uJwtService,
+  uJwtRequestContext;
 
 //***************************************
 //* LIST
 //***************************************
-class procedure TEntityController.List(
+{class procedure TEntityController.List(
   Req: THorseRequest;
   Res: THorseResponse
 );
@@ -36,11 +38,46 @@ begin
   Res.Send(
     TEntityService.List
   );
-end;
+end;  }
 
 //***************************************
-//* GETBYUUID
+//* LIST
 //***************************************
+class procedure TEntityController.List(
+  Req: THorseRequest;
+  Res: THorseResponse
+);
+var
+  LJwtContext: TJwtContext;
+begin
+  Res.ContentType('application/json; charset=utf-8');
+
+  if not TryGetJwtContext(
+    Req,
+    LJwtContext
+  ) then
+  begin
+    Res.Status(401);
+
+    Res.Send(
+      '{"success":false,"message":"Contexto de autenticação não encontrado."}'
+    );
+
+    Exit;
+  end;
+
+  Res.Status(200);
+
+  Res.Send(
+    TEntityService.List(
+      LJwtContext.TenantID
+    )
+  );
+end;
+
+ //***************************************
+ //* GETBYUUID
+ //***************************************
 class procedure TEntityController.GetByUuid(
   Req: THorseRequest;
   Res: THorseResponse
@@ -49,6 +86,7 @@ var
   EntityUuid: string;
   JsonResult: string;
   ValidUuid: Boolean;
+  LJwtContext: TJwtContext;
 begin
   EntityUuid := Trim(
     Req.Params['uuid']
@@ -65,8 +103,23 @@ begin
     Exit;
   end;
 
+  if not TryGetJwtContext(
+    Req,
+    LJwtContext
+  ) then
+  begin
+    Res.Status(401);
+
+    Res.Send(
+      '{"success":false,"message":"Contexto de autenticação não encontrado."}'
+    );
+
+    Exit;
+  end;
+
   JsonResult := TEntityService.GetByUuid(
     EntityUuid,
+    LJwtContext.TenantID,
     ValidUuid
   );
 
@@ -125,10 +178,25 @@ var
   JsonResult: string;
   ErrorMessage: string;
   JsonValue: TJSONValue;
+
+  LJwtContext: TJwtContext;
 begin
   Res.ContentType('application/json; charset=utf-8');
 
   JsonBody := nil;
+  if not TryGetJwtContext(
+    Req,
+    LJwtContext
+  ) then
+  begin
+    Res.Status(401);
+
+    Res.Send(
+      '{"success":false,"message":"Contexto de autenticação não encontrado."}'
+    );
+
+    Exit;
+  end;
 
   try
     try
@@ -274,6 +342,7 @@ begin
       // Chama o Service
       // ---------------------------------------------------------
       JsonResult := TEntityService.Create(
+        LJwtContext.TenantID,
         EntityType,
         TaxId,
         LegalName,
@@ -375,12 +444,28 @@ var
   ValidUuid: Boolean;
 
   JsonValue: TJSONValue;
+
+  LJwtContext: TJwtContext;
 begin
   Res.ContentType('application/json; charset=utf-8');
 
   EntityUuid := Req.Params['uuid'];
 
   JsonBody := nil;
+
+  if not TryGetJwtContext(
+    Req,
+    LJwtContext
+  ) then
+  begin
+    Res.Status(401);
+
+    Res.Send(
+      '{"success":false,"message":"Contexto de autenticação não encontrado."}'
+    );
+
+    Exit;
+  end;
 
   try
     try
@@ -526,6 +611,7 @@ begin
       // Chama o Service
       // ---------------------------------------------------------
       JsonResult := TEntityService.Update(
+        LJwtContext.TenantID,
         EntityUuid,
         EntityType,
         TaxId,
@@ -631,8 +717,21 @@ var
   EntityUuid: string;
   ValidUuid: Boolean;
   Deleted: Boolean;
+  LJwtContext: TJwtContext;
 begin
   Res.ContentType('application/json; charset=utf-8');
+
+  if not TryGetJwtContext(
+    Req,
+    LJwtContext
+  ) then
+  begin
+    Res.Status(401);
+    Res.Send(
+      '{"success":false,"message":"Contexto de autenticação não encontrado."}'
+    );
+    Exit;
+  end;
 
   EntityUuid := Trim(Req.Params['uuid']);
 
@@ -647,6 +746,7 @@ begin
 
   Deleted := TEntityService.Delete(
     EntityUuid,
+    LJwtContext.TenantID,
     ValidUuid
   );
 
@@ -684,8 +784,21 @@ var
   ValidUuid: Boolean;
   HasDependencies: Boolean;
   Deleted: Boolean;
+  LJwtContext: TJwtContext;
 begin
   Res.ContentType('application/json; charset=utf-8');
+
+  if not TryGetJwtContext(
+    Req,
+    LJwtContext
+  ) then
+  begin
+    Res.Status(401);
+    Res.Send(
+      '{"success":false,"message":"Contexto de autenticação não encontrado."}'
+    );
+    Exit;
+  end;
 
   EntityUuid := Trim(Req.Params['uuid']);
 
@@ -700,6 +813,7 @@ begin
 
   Deleted := TEntityService.HardDelete(
     EntityUuid,
+    LJwtContext.TenantID,
     ValidUuid,
     HasDependencies
   );
@@ -734,5 +848,4 @@ begin
   Res.Status(204);
   Res.Send('');
 end;
-
 end.
