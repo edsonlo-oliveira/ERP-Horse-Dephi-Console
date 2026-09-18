@@ -8,12 +8,37 @@ uses
 type
   TEntityController = class
   public
-    class procedure List(Req: THorseRequest; Res: THorseResponse);
-    class procedure GetByUuid(Req: THorseRequest; Res: THorseResponse);
-    class procedure Create(Req: THorseRequest; Res: THorseResponse; Next: TProc);
-    class procedure Update(Req: THorseRequest; Res: THorseResponse; Next: TProc);
-    class procedure Delete(Req: THorseRequest; Res: THorseResponse);
-    class procedure HardDelete(Req: THorseRequest; Res: THorseResponse);
+    class procedure List(
+      Req: THorseRequest;
+      Res: THorseResponse
+    );
+
+    class procedure GetByUuid(
+      Req: THorseRequest;
+      Res: THorseResponse
+    );
+
+    class procedure Create(
+      Req: THorseRequest;
+      Res: THorseResponse;
+      Next: TProc
+    );
+
+    class procedure Update(
+      Req: THorseRequest;
+      Res: THorseResponse;
+      Next: TProc
+    );
+
+    class procedure Delete(
+      Req: THorseRequest;
+      Res: THorseResponse
+    );
+
+    class procedure HardDelete(
+      Req: THorseRequest;
+      Res: THorseResponse
+    );
   end;
 
 implementation
@@ -25,20 +50,6 @@ uses
   uJwtService,
   uJwtRequestContext;
 
-//***************************************
-//* LIST
-//***************************************
-{class procedure TEntityController.List(
-  Req: THorseRequest;
-  Res: THorseResponse
-);
-begin
-  Res.ContentType('application/json; charset=utf-8');
-
-  Res.Send(
-    TEntityService.List
-  );
-end;  }
 
 //***************************************
 //* LIST
@@ -50,7 +61,9 @@ class procedure TEntityController.List(
 var
   LJwtContext: TJwtContext;
 begin
-  Res.ContentType('application/json; charset=utf-8');
+  Res.ContentType(
+    'application/json; charset=utf-8'
+  );
 
   if not TryGetJwtContext(
     Req,
@@ -70,14 +83,17 @@ begin
 
   Res.Send(
     TEntityService.List(
-      LJwtContext.TenantID
+      LJwtContext.TenantID,
+      LJwtContext.SuperUser,
+      LJwtContext.Scope
     )
   );
 end;
 
- //***************************************
- //* GETBYUUID
- //***************************************
+
+//***************************************
+//* GET BY UUID
+//***************************************
 class procedure TEntityController.GetByUuid(
   Req: THorseRequest;
   Res: THorseResponse
@@ -88,20 +104,9 @@ var
   ValidUuid: Boolean;
   LJwtContext: TJwtContext;
 begin
-  EntityUuid := Trim(
-    Req.Params['uuid']
+  Res.ContentType(
+    'application/json; charset=utf-8'
   );
-
-  if EntityUuid = '' then
-  begin
-    Res.Status(400);
-
-    Res.Send(
-      '{"success":false,"message":"UUID da entidade não informado."}'
-    );
-
-    Exit;
-  end;
 
   if not TryGetJwtContext(
     Req,
@@ -117,11 +122,30 @@ begin
     Exit;
   end;
 
-  JsonResult := TEntityService.GetByUuid(
-    EntityUuid,
-    LJwtContext.TenantID,
-    ValidUuid
-  );
+  EntityUuid :=
+    Trim(
+      Req.Params['uuid']
+    );
+
+  if EntityUuid = '' then
+  begin
+    Res.Status(400);
+
+    Res.Send(
+      '{"success":false,"message":"UUID da entidade não informado."}'
+    );
+
+    Exit;
+  end;
+
+  JsonResult :=
+    TEntityService.GetByUuid(
+      EntityUuid,
+      LJwtContext.TenantID,
+      LJwtContext.SuperUser,
+      LJwtContext.Scope,
+      ValidUuid
+    );
 
   if not ValidUuid then
   begin
@@ -145,10 +169,10 @@ begin
     Exit;
   end;
 
-  Res.ContentType('application/json; charset=utf-8');
   Res.Status(200);
   Res.Send(JsonResult);
 end;
+
 
 //***************************************
 //* CREATE
@@ -160,6 +184,8 @@ class procedure TEntityController.Create(
 );
 var
   JsonBody: TJSONObject;
+
+  TargetTenantID: Int64;
 
   EntityType: string;
   TaxId: string;
@@ -181,9 +207,12 @@ var
 
   LJwtContext: TJwtContext;
 begin
-  Res.ContentType('application/json; charset=utf-8');
+  Res.ContentType(
+    'application/json; charset=utf-8'
+  );
 
   JsonBody := nil;
+
   if not TryGetJwtContext(
     Req,
     LJwtContext
@@ -203,22 +232,27 @@ begin
       // ---------------------------------------------------------
       // Converte o corpo da requisição para JSON
       // ---------------------------------------------------------
-      JsonBody := TJSONObject.ParseJSONValue(
-        Req.Body
-      ) as TJSONObject;
+      JsonBody :=
+        TJSONObject.ParseJSONValue(
+          Req.Body
+        ) as TJSONObject;
 
       if not Assigned(JsonBody) then
       begin
         Res.Status(400);
+
         Res.Send(
           '{"success":false,"message":"JSON inválido."}'
         );
+
         Exit;
       end;
 
       // ---------------------------------------------------------
       // Valores padrão
       // ---------------------------------------------------------
+      TargetTenantID := 0;
+
       EntityType := '';
       TaxId := '';
       LegalName := '';
@@ -234,129 +268,224 @@ begin
       MobilePhone := '';
 
       // ---------------------------------------------------------
+      // tenant_id
+      //
+      // Só é considerado para SuperUser GLOBAL.
+      // Usuário TENANT não pode escolher outro tenant.
+      // ---------------------------------------------------------
+      if LJwtContext.SuperUser and
+         SameText(
+           Trim(LJwtContext.Scope),
+           'GLOBAL'
+         ) then
+      begin
+        JsonValue :=
+          JsonBody.GetValue(
+            'tenant_id'
+          );
+
+        if Assigned(JsonValue) and
+           not (JsonValue is TJSONNull) then
+        begin
+          if not TryStrToInt64(
+            JsonValue.Value,
+            TargetTenantID
+          ) then
+          begin
+            Res.Status(400);
+
+            Res.Send(
+              '{"success":false,"message":"tenant_id inválido."}'
+            );
+
+            Exit;
+          end;
+
+          if TargetTenantID <= 0 then
+          begin
+            Res.Status(400);
+
+            Res.Send(
+              '{"success":false,"message":"tenant_id inválido."}'
+            );
+
+            Exit;
+          end;
+        end;
+      end;
+
+      // ---------------------------------------------------------
       // entity_type
       // ---------------------------------------------------------
-      JsonValue := JsonBody.GetValue('entity_type');
+      JsonValue :=
+        JsonBody.GetValue(
+          'entity_type'
+        );
 
       if Assigned(JsonValue) and
          not (JsonValue is TJSONNull) then
-        EntityType := JsonValue.Value;
+        EntityType :=
+          JsonValue.Value;
 
       // ---------------------------------------------------------
       // tax_id
       // ---------------------------------------------------------
-      JsonValue := JsonBody.GetValue('tax_id');
+      JsonValue :=
+        JsonBody.GetValue(
+          'tax_id'
+        );
 
       if Assigned(JsonValue) and
          not (JsonValue is TJSONNull) then
-        TaxId := JsonValue.Value;
+        TaxId :=
+          JsonValue.Value;
 
       // ---------------------------------------------------------
       // legal_name
       // ---------------------------------------------------------
-      JsonValue := JsonBody.GetValue('legal_name');
+      JsonValue :=
+        JsonBody.GetValue(
+          'legal_name'
+        );
 
       if Assigned(JsonValue) and
          not (JsonValue is TJSONNull) then
-        LegalName := JsonValue.Value;
+        LegalName :=
+          JsonValue.Value;
 
       // ---------------------------------------------------------
       // trade_name
       // ---------------------------------------------------------
-      JsonValue := JsonBody.GetValue('trade_name');
+      JsonValue :=
+        JsonBody.GetValue(
+          'trade_name'
+        );
 
       if Assigned(JsonValue) and
          not (JsonValue is TJSONNull) then
-        TradeName := JsonValue.Value;
+        TradeName :=
+          JsonValue.Value;
 
       // ---------------------------------------------------------
       // state_registration
       // ---------------------------------------------------------
-      JsonValue := JsonBody.GetValue('state_registration');
+      JsonValue :=
+        JsonBody.GetValue(
+          'state_registration'
+        );
 
       if Assigned(JsonValue) and
          not (JsonValue is TJSONNull) then
-        StateRegistration := JsonValue.Value;
+        StateRegistration :=
+          JsonValue.Value;
 
       // ---------------------------------------------------------
       // municipal_registration
       // ---------------------------------------------------------
-      JsonValue := JsonBody.GetValue('municipal_registration');
+      JsonValue :=
+        JsonBody.GetValue(
+          'municipal_registration'
+        );
 
       if Assigned(JsonValue) and
          not (JsonValue is TJSONNull) then
-        MunicipalRegistration := JsonValue.Value;
+        MunicipalRegistration :=
+          JsonValue.Value;
 
       // ---------------------------------------------------------
       // is_customer
       // ---------------------------------------------------------
-      JsonValue := JsonBody.GetValue('is_customer');
+      JsonValue :=
+        JsonBody.GetValue(
+          'is_customer'
+        );
 
       if Assigned(JsonValue) and
          not (JsonValue is TJSONNull) then
-        IsCustomer := SameText(
-          JsonValue.Value,
-          'true'
-        );
+        IsCustomer :=
+          SameText(
+            JsonValue.Value,
+            'true'
+          );
 
       // ---------------------------------------------------------
       // is_supplier
       // ---------------------------------------------------------
-      JsonValue := JsonBody.GetValue('is_supplier');
+      JsonValue :=
+        JsonBody.GetValue(
+          'is_supplier'
+        );
 
       if Assigned(JsonValue) and
          not (JsonValue is TJSONNull) then
-        IsSupplier := SameText(
-          JsonValue.Value,
-          'true'
-        );
+        IsSupplier :=
+          SameText(
+            JsonValue.Value,
+            'true'
+          );
 
       // ---------------------------------------------------------
       // email
       // ---------------------------------------------------------
-      JsonValue := JsonBody.GetValue('email');
+      JsonValue :=
+        JsonBody.GetValue(
+          'email'
+        );
 
       if Assigned(JsonValue) and
          not (JsonValue is TJSONNull) then
-        Email := JsonValue.Value;
+        Email :=
+          JsonValue.Value;
 
       // ---------------------------------------------------------
       // phone
       // ---------------------------------------------------------
-      JsonValue := JsonBody.GetValue('phone');
+      JsonValue :=
+        JsonBody.GetValue(
+          'phone'
+        );
 
       if Assigned(JsonValue) and
          not (JsonValue is TJSONNull) then
-        Phone := JsonValue.Value;
+        Phone :=
+          JsonValue.Value;
 
       // ---------------------------------------------------------
       // mobile_phone
       // ---------------------------------------------------------
-      JsonValue := JsonBody.GetValue('mobile_phone');
+      JsonValue :=
+        JsonBody.GetValue(
+          'mobile_phone'
+        );
 
       if Assigned(JsonValue) and
          not (JsonValue is TJSONNull) then
-        MobilePhone := JsonValue.Value;
+        MobilePhone :=
+          JsonValue.Value;
 
       // ---------------------------------------------------------
       // Chama o Service
       // ---------------------------------------------------------
-      JsonResult := TEntityService.Create(
-        LJwtContext.UserID,
-        LJwtContext.TenantID,
-        EntityType,
-        TaxId,
-        LegalName,
-        TradeName,
-        StateRegistration,
-        MunicipalRegistration,
-        IsCustomer,
-        IsSupplier,
-        Email,
-        Phone,
-        MobilePhone,
-        ErrorMessage
-      );
+      JsonResult :=
+        TEntityService.Create(
+          LJwtContext.UserID,
+          LJwtContext.TenantID,
+          LJwtContext.SuperUser,
+          LJwtContext.Scope,
+          TargetTenantID,
+          EntityType,
+          TaxId,
+          LegalName,
+          TradeName,
+          StateRegistration,
+          MunicipalRegistration,
+          IsCustomer,
+          IsSupplier,
+          Email,
+          Phone,
+          MobilePhone,
+          ErrorMessage
+        );
 
       // ---------------------------------------------------------
       // Erro de validação/business rule
@@ -400,7 +529,8 @@ begin
             )
             .AddPair(
               'message',
-              'Erro interno ao criar entidade: ' + E.Message
+              'Erro interno ao criar entidade: ' +
+              E.Message
             )
             .ToJSON
         );
@@ -411,6 +541,7 @@ begin
     JsonBody.Free;
   end;
 end;
+
 
 //***************************************
 //* UPDATE
@@ -448,11 +579,9 @@ var
 
   LJwtContext: TJwtContext;
 begin
-  Res.ContentType('application/json; charset=utf-8');
-
-  EntityUuid := Req.Params['uuid'];
-
-  JsonBody := nil;
+  Res.ContentType(
+    'application/json; charset=utf-8'
+  );
 
   if not TryGetJwtContext(
     Req,
@@ -468,21 +597,42 @@ begin
     Exit;
   end;
 
+  EntityUuid :=
+    Trim(
+      Req.Params['uuid']
+    );
+
+  if EntityUuid = '' then
+  begin
+    Res.Status(400);
+
+    Res.Send(
+      '{"success":false,"message":"UUID da entidade não informado."}'
+    );
+
+    Exit;
+  end;
+
+  JsonBody := nil;
+
   try
     try
       // ---------------------------------------------------------
       // Converte o corpo da requisição para JSON
       // ---------------------------------------------------------
-      JsonBody := TJSONObject.ParseJSONValue(
-        Req.Body
-      ) as TJSONObject;
+      JsonBody :=
+        TJSONObject.ParseJSONValue(
+          Req.Body
+        ) as TJSONObject;
 
       if not Assigned(JsonBody) then
       begin
         Res.Status(400);
+
         Res.Send(
           '{"success":false,"message":"JSON inválido."}'
         );
+
         Exit;
       end;
 
@@ -506,128 +656,176 @@ begin
       // ---------------------------------------------------------
       // entity_type
       // ---------------------------------------------------------
-      JsonValue := JsonBody.GetValue('entity_type');
+      JsonValue :=
+        JsonBody.GetValue(
+          'entity_type'
+        );
 
       if Assigned(JsonValue) and
          not (JsonValue is TJSONNull) then
-        EntityType := JsonValue.Value;
+        EntityType :=
+          JsonValue.Value;
 
       // ---------------------------------------------------------
       // tax_id
       // ---------------------------------------------------------
-      JsonValue := JsonBody.GetValue('tax_id');
+      JsonValue :=
+        JsonBody.GetValue(
+          'tax_id'
+        );
 
       if Assigned(JsonValue) and
          not (JsonValue is TJSONNull) then
-        TaxId := JsonValue.Value;
+        TaxId :=
+          JsonValue.Value;
 
       // ---------------------------------------------------------
       // legal_name
       // ---------------------------------------------------------
-      JsonValue := JsonBody.GetValue('legal_name');
+      JsonValue :=
+        JsonBody.GetValue(
+          'legal_name'
+        );
 
       if Assigned(JsonValue) and
          not (JsonValue is TJSONNull) then
-        LegalName := JsonValue.Value;
+        LegalName :=
+          JsonValue.Value;
 
       // ---------------------------------------------------------
       // trade_name
       // ---------------------------------------------------------
-      JsonValue := JsonBody.GetValue('trade_name');
+      JsonValue :=
+        JsonBody.GetValue(
+          'trade_name'
+        );
 
       if Assigned(JsonValue) and
          not (JsonValue is TJSONNull) then
-        TradeName := JsonValue.Value;
+        TradeName :=
+          JsonValue.Value;
 
       // ---------------------------------------------------------
       // state_registration
       // ---------------------------------------------------------
-      JsonValue := JsonBody.GetValue('state_registration');
+      JsonValue :=
+        JsonBody.GetValue(
+          'state_registration'
+        );
 
       if Assigned(JsonValue) and
          not (JsonValue is TJSONNull) then
-        StateRegistration := JsonValue.Value;
+        StateRegistration :=
+          JsonValue.Value;
 
       // ---------------------------------------------------------
       // municipal_registration
       // ---------------------------------------------------------
-      JsonValue := JsonBody.GetValue('municipal_registration');
+      JsonValue :=
+        JsonBody.GetValue(
+          'municipal_registration'
+        );
 
       if Assigned(JsonValue) and
          not (JsonValue is TJSONNull) then
-        MunicipalRegistration := JsonValue.Value;
+        MunicipalRegistration :=
+          JsonValue.Value;
 
       // ---------------------------------------------------------
       // is_customer
       // ---------------------------------------------------------
-      JsonValue := JsonBody.GetValue('is_customer');
+      JsonValue :=
+        JsonBody.GetValue(
+          'is_customer'
+        );
 
       if Assigned(JsonValue) and
          not (JsonValue is TJSONNull) then
-        IsCustomer := SameText(
-          JsonValue.Value,
-          'true'
-        );
+        IsCustomer :=
+          SameText(
+            JsonValue.Value,
+            'true'
+          );
 
       // ---------------------------------------------------------
       // is_supplier
       // ---------------------------------------------------------
-      JsonValue := JsonBody.GetValue('is_supplier');
+      JsonValue :=
+        JsonBody.GetValue(
+          'is_supplier'
+        );
 
       if Assigned(JsonValue) and
          not (JsonValue is TJSONNull) then
-        IsSupplier := SameText(
-          JsonValue.Value,
-          'true'
-        );
+        IsSupplier :=
+          SameText(
+            JsonValue.Value,
+            'true'
+          );
 
       // ---------------------------------------------------------
       // email
       // ---------------------------------------------------------
-      JsonValue := JsonBody.GetValue('email');
+      JsonValue :=
+        JsonBody.GetValue(
+          'email'
+        );
 
       if Assigned(JsonValue) and
          not (JsonValue is TJSONNull) then
-        Email := JsonValue.Value;
+        Email :=
+          JsonValue.Value;
 
       // ---------------------------------------------------------
       // phone
       // ---------------------------------------------------------
-      JsonValue := JsonBody.GetValue('phone');
+      JsonValue :=
+        JsonBody.GetValue(
+          'phone'
+        );
 
       if Assigned(JsonValue) and
          not (JsonValue is TJSONNull) then
-        Phone := JsonValue.Value;
+        Phone :=
+          JsonValue.Value;
 
       // ---------------------------------------------------------
       // mobile_phone
       // ---------------------------------------------------------
-      JsonValue := JsonBody.GetValue('mobile_phone');
+      JsonValue :=
+        JsonBody.GetValue(
+          'mobile_phone'
+        );
 
       if Assigned(JsonValue) and
          not (JsonValue is TJSONNull) then
-        MobilePhone := JsonValue.Value;
+        MobilePhone :=
+          JsonValue.Value;
 
       // ---------------------------------------------------------
       // Chama o Service
       // ---------------------------------------------------------
-      JsonResult := TEntityService.Update(
-        LJwtContext.TenantID,
-        EntityUuid,
-        EntityType,
-        TaxId,
-        LegalName,
-        TradeName,
-        StateRegistration,
-        MunicipalRegistration,
-        IsCustomer,
-        IsSupplier,
-        Email,
-        Phone,
-        MobilePhone,
-        ValidUuid,
-        ErrorMessage
-      );
+      JsonResult :=
+        TEntityService.Update(
+          LJwtContext.UserID,
+          LJwtContext.TenantID,
+          LJwtContext.SuperUser,
+          LJwtContext.Scope,
+          EntityUuid,
+          EntityType,
+          TaxId,
+          LegalName,
+          TradeName,
+          StateRegistration,
+          MunicipalRegistration,
+          IsCustomer,
+          IsSupplier,
+          Email,
+          Phone,
+          MobilePhone,
+          ValidUuid,
+          ErrorMessage
+        );
 
       // ---------------------------------------------------------
       // UUID inválido
@@ -635,9 +833,11 @@ begin
       if not ValidUuid then
       begin
         Res.Status(400);
+
         Res.Send(
           '{"success":false,"message":"UUID da entidade inválido."}'
         );
+
         Exit;
       end;
 
@@ -670,9 +870,11 @@ begin
       if JsonResult = '' then
       begin
         Res.Status(404);
+
         Res.Send(
           '{"success":false,"message":"Entidade não encontrada."}'
         );
+
         Exit;
       end;
 
@@ -695,7 +897,8 @@ begin
             )
             .AddPair(
               'message',
-              'Erro interno ao atualizar entidade: ' + E.Message
+              'Erro interno ao atualizar entidade: ' +
+              E.Message
             )
             .ToJSON
         );
@@ -706,6 +909,7 @@ begin
     JsonBody.Free;
   end;
 end;
+
 
 //***************************************
 //* SOFT DELETE
@@ -720,7 +924,9 @@ var
   Deleted: Boolean;
   LJwtContext: TJwtContext;
 begin
-  Res.ContentType('application/json; charset=utf-8');
+  Res.ContentType(
+    'application/json; charset=utf-8'
+  );
 
   if not TryGetJwtContext(
     Req,
@@ -728,50 +934,66 @@ begin
   ) then
   begin
     Res.Status(401);
+
     Res.Send(
       '{"success":false,"message":"Contexto de autenticação não encontrado."}'
     );
+
     Exit;
   end;
 
-  EntityUuid := Trim(Req.Params['uuid']);
+  EntityUuid :=
+    Trim(
+      Req.Params['uuid']
+    );
 
   if EntityUuid = '' then
   begin
     Res.Status(400);
+
     Res.Send(
       '{"success":false,"message":"UUID da entidade não informado."}'
     );
+
     Exit;
   end;
 
-  Deleted := TEntityService.Delete(
-    EntityUuid,
-    LJwtContext.TenantID,
-    ValidUuid
-  );
+  Deleted :=
+    TEntityService.Delete(
+      EntityUuid,
+      LJwtContext.UserID,
+      LJwtContext.TenantID,
+      LJwtContext.SuperUser,
+      LJwtContext.Scope,
+      ValidUuid
+    );
 
   if not ValidUuid then
   begin
     Res.Status(400);
+
     Res.Send(
       '{"success":false,"message":"UUID da entidade inválido."}'
     );
+
     Exit;
   end;
 
   if not Deleted then
   begin
     Res.Status(404);
+
     Res.Send(
       '{"success":false,"message":"Entidade não encontrada."}'
     );
+
     Exit;
   end;
 
   Res.Status(204);
   Res.Send('');
 end;
+
 
 //***************************************
 //* HARD DELETE
@@ -787,7 +1009,9 @@ var
   Deleted: Boolean;
   LJwtContext: TJwtContext;
 begin
-  Res.ContentType('application/json; charset=utf-8');
+  Res.ContentType(
+    'application/json; charset=utf-8'
+  );
 
   if not TryGetJwtContext(
     Req,
@@ -795,58 +1019,76 @@ begin
   ) then
   begin
     Res.Status(401);
+
     Res.Send(
       '{"success":false,"message":"Contexto de autenticação não encontrado."}'
     );
+
     Exit;
   end;
 
-  EntityUuid := Trim(Req.Params['uuid']);
+  EntityUuid :=
+    Trim(
+      Req.Params['uuid']
+    );
 
   if EntityUuid = '' then
   begin
     Res.Status(400);
+
     Res.Send(
       '{"success":false,"message":"UUID da entidade não informado."}'
     );
+
     Exit;
   end;
 
-  Deleted := TEntityService.HardDelete(
-    EntityUuid,
-    LJwtContext.TenantID,
-    ValidUuid,
-    HasDependencies
-  );
+  Deleted :=
+    TEntityService.HardDelete(
+      EntityUuid,
+      LJwtContext.UserID,
+      LJwtContext.TenantID,
+      LJwtContext.SuperUser,
+      LJwtContext.Scope,
+      ValidUuid,
+      HasDependencies
+    );
 
   if not ValidUuid then
   begin
     Res.Status(400);
+
     Res.Send(
       '{"success":false,"message":"UUID da entidade inválido."}'
     );
+
     Exit;
   end;
 
   if HasDependencies then
   begin
     Res.Status(409);
+
     Res.Send(
       '{"success":false,"message":"A entidade não pode ser excluída definitivamente porque possui endereços cadastrados."}'
     );
+
     Exit;
   end;
 
   if not Deleted then
   begin
     Res.Status(404);
+
     Res.Send(
       '{"success":false,"message":"Entidade não encontrada."}'
     );
+
     Exit;
   end;
 
   Res.Status(204);
   Res.Send('');
 end;
+
 end.
