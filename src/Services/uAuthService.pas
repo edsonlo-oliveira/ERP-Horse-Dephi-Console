@@ -45,6 +45,7 @@ var
   LPasswordHash: string;
   LStatus: string;
   LSuperUser: Boolean;
+  Connection: TFDConnection;
   LQuery: TFDQuery;
   LToken: string;
   LScope: string;
@@ -120,10 +121,10 @@ begin
       'Login ou senha inválidos.'
     );
 
+  Connection := TApiDatabase.NewConnection;
   LQuery := TFDQuery.Create(nil);
   try
-    LQuery.Connection :=
-      TApiDatabase.Connection;
+    LQuery.Connection := Connection;
 
     LQuery.SQL.Text :=
       'UPDATE core.users ' +
@@ -157,6 +158,7 @@ begin
 
   finally
     LQuery.Free;
+    Connection.Free;
   end;
 
   LObject := TJSONObject.Create;

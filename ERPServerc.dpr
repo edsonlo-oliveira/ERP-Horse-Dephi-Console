@@ -15,6 +15,7 @@ uses
   FireDAC.Phys,
   FireDAC.Phys.PG,
   FireDAC.Phys.PGDef,
+  FireDAC.Stan.Pool,
   Horse,
   uEntityService in 'src\Services\uEntityService.pas',
   uEntityRepository in 'src\Repositories\uEntityRepository.pas',
@@ -48,11 +49,13 @@ begin
     Writeln('Sistema de ERP - Server (64 Bit) (Release Beta 1 for Windows/64) ' + FormatDateTime('dd-mm-yyyy hh:nn:ss', Now));
     Writeln('');
 
-    // Inicializa a conexão com o PostgreSQL
+    // Inicializa a infraestrutura FireDAC
+    // e o pool de conexões PostgreSQL
     TApiDatabase.Initialize;
-    TApiDatabase.Connection.Connected := True;
-    Writeln('Conexao com Banco de Dados estabelecida com sucesso.');
+
+    Writeln('Pool de conexoes com Banco de Dados inicializado com sucesso.');
     Writeln('');
+
     RegisterRoutes;
     TThread.CreateAnonymousThread(
       procedure

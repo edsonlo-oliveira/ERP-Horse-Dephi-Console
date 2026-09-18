@@ -342,6 +342,7 @@ begin
       // Chama o Service
       // ---------------------------------------------------------
       JsonResult := TEntityService.Create(
+        LJwtContext.UserID,
         LJwtContext.TenantID,
         EntityType,
         TaxId,

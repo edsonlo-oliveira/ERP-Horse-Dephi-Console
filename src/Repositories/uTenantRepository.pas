@@ -65,16 +65,18 @@ uses
 //***************************************
 class function TTenantRepository.List: string;
 var
+  Connection: TFDConnection;
   Query: TFDQuery;
   JsonArray: TJSONArray;
   JsonObject: TJSONObject;
 begin
   Result := '';
 
+  Connection := TApiDatabase.NewConnection;
   Query := TFDQuery.Create(nil);
   JsonArray := TJSONArray.Create;
   try
-    Query.Connection := TApiDatabase.Connection;
+    Query.Connection := Connection;
 
     Query.SQL.Text :=
       'SELECT ' +
@@ -246,6 +248,7 @@ begin
   finally
     JsonArray.Free;
     Query.Free;
+    Connection.Free;
   end;
 end;
 
@@ -254,6 +257,7 @@ end;
 //***************************************
 class function TTenantRepository.GetByUuid(const ATenantUuid: string): string;
 var
+  Connection: TFDConnection;
   Query: TFDQuery;
   JsonObject: TJSONObject;
   NormalizedUuid: string;
@@ -264,9 +268,10 @@ begin
   NormalizedUuid := StringReplace(NormalizedUuid, '{', '', [rfReplaceAll]);
   NormalizedUuid := StringReplace(NormalizedUuid, '}', '', [rfReplaceAll]);
 
+  Connection := TApiDatabase.NewConnection;
   Query := TFDQuery.Create(nil);
   try
-    Query.Connection := TApiDatabase.Connection;
+    Query.Connection := Connection;
 
     Query.SQL.Text :=
       'SELECT ' +
@@ -440,6 +445,7 @@ begin
 
   finally
     Query.Free;
+    Connection.Free;
   end;
 end;
 
@@ -465,14 +471,16 @@ const AStatus: string;
 const AIsMaster: Boolean
 ): string;
 var
+  Connection: TFDConnection;
   Query: TFDQuery;
   JsonObject: TJSONObject;
 begin
   Result := '';
 
+  Connection := TApiDatabase.NewConnection;
   Query := TFDQuery.Create(nil);
   try
-    Query.Connection := TApiDatabase.Connection;
+    Query.Connection := Connection;
     Query.SQL.Text :=
       'INSERT INTO core.tenants (' +
       '  legal_name, ' +
@@ -759,6 +767,7 @@ begin
     end;
   finally
     Query.Free;
+    Connection.Free;
   end;
 end;
 
@@ -784,6 +793,7 @@ class function TTenantRepository.Update(
   const AIsMaster: Boolean
 ): string;
 var
+  Connection: TFDConnection;
   Query: TFDQuery;
   JsonObject: TJSONObject;
   NormalizedUuid: string;
@@ -806,9 +816,10 @@ begin
     [rfReplaceAll]
   );
 
+  Connection := TApiDatabase.NewConnection;
   Query := TFDQuery.Create(nil);
   try
-    Query.Connection := TApiDatabase.Connection;
+    Query.Connection := Connection;
 
     Query.SQL.Text :=
       'UPDATE core.tenants ' +
@@ -1127,6 +1138,7 @@ begin
 
   finally
     Query.Free;
+    Connection.Free;
   end;
 end;
 
@@ -1137,6 +1149,7 @@ class function TTenantRepository.Delete(
   const ATenantUuid: string
 ): Boolean;
 var
+  Connection: TFDConnection;
   Query: TFDQuery;
   NormalizedUuid: string;
 begin
@@ -1154,9 +1167,10 @@ begin
     [rfReplaceAll]
   );
 
+  Connection := TApiDatabase.NewConnection;
   Query := TFDQuery.Create(nil);
   try
-    Query.Connection := TApiDatabase.Connection;
+    Query.Connection := Connection;
 
     Query.SQL.Text :=
       'UPDATE core.tenants ' +
@@ -1175,6 +1189,7 @@ begin
     Result := Query.RowsAffected > 0;
   finally
     Query.Free;
+    Connection.Free;
   end;
 end;
 
@@ -1185,11 +1200,13 @@ class function TTenantRepository.MasterExists(
   const ATenantUuid: string
 ): Boolean;
 var
+  Connection: TFDConnection;
   Query: TFDQuery;
 begin
+  Connection := TApiDatabase.NewConnection;
   Query := TFDQuery.Create(nil);
   try
-    Query.Connection := TApiDatabase.Connection;
+    Query.Connection := Connection;
 
     Query.SQL.Text :=
       'SELECT EXISTS (' +
@@ -1212,6 +1229,7 @@ begin
 
   finally
     Query.Free;
+    Connection.Free;
   end;
 end;
 
@@ -1223,11 +1241,13 @@ class function TTenantRepository.TaxIdExists(
   const ATenantUuid: string
 ): Boolean;
 var
+  Connection: TFDConnection;
   Query: TFDQuery;
 begin
+  Connection := TApiDatabase.NewConnection;
   Query := TFDQuery.Create(nil);
   try
-    Query.Connection := TApiDatabase.Connection;
+    Query.Connection := Connection;
 
     Query.SQL.Text :=
       'SELECT EXISTS (' +
@@ -1253,6 +1273,7 @@ begin
 
   finally
     Query.Free;
+    Connection.Free;
   end;
 end;
 end.

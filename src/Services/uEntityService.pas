@@ -9,6 +9,7 @@ type
     class function GetByUuid(const AEntityUuid: string; const ATenantID: Int64; out AValidUuid: Boolean): string;
 
     class function Create(
+      const AUserID: Int64;
       const ATenantID: Int64;
       const AEntityType: string;
       const ATaxId: string;
@@ -105,8 +106,8 @@ end;
 //***************************************
 //* CREATE
 //***************************************
-
 class function TEntityService.Create(
+  const AUserID: Int64;
   const ATenantID: Int64;
   const AEntityType: string;
   const ATaxId: string;
@@ -147,6 +148,7 @@ begin
   end;
 
   Result := TEntityRepository.Create(
+    AUserID,
     ATenantID,
     Trim(AEntityType),
     Trim(ATaxId),

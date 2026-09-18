@@ -179,12 +179,14 @@ class function TUserRepository.List(
   const ATenantId: Int64
 ): string;
 var
+  Connection: TFDConnection;
   LQuery: TFDQuery;
   LArray: TJSONArray;
 begin
+  Connection := TApiDatabase.NewConnection;
   LQuery := TFDQuery.Create(nil);
   try
-    LQuery.Connection := TApiDatabase.Connection;
+    LQuery.Connection := Connection;
 
     LQuery.SQL.Text :=
       'SELECT ' +
@@ -227,6 +229,7 @@ begin
 
   finally
     LQuery.Free;
+    Connection.Free;
   end;
 end;
 
@@ -238,6 +241,7 @@ class function TUserRepository.GetByUuid(
   const ATenantId: Int64
 ): string;
 var
+  Connection: TFDConnection;
   LQuery: TFDQuery;
   LUserUuid: string;
   LJson: TJSONObject;
@@ -258,9 +262,10 @@ begin
     [rfReplaceAll]
   );
 
+  Connection := TApiDatabase.NewConnection;
   LQuery := TFDQuery.Create(nil);
   try
-    LQuery.Connection := TApiDatabase.Connection;
+    LQuery.Connection := Connection;
 
     LQuery.SQL.Text :=
       'SELECT ' +
@@ -303,6 +308,7 @@ begin
 
   finally
     LQuery.Free;
+    Connection.Free;
   end;
 end;
 
@@ -321,15 +327,17 @@ class function TUserRepository.Create(
   const ASuperUser: Boolean
 ): string;
 var
+  Connection: TFDConnection;
   LQuery: TFDQuery;
   LJson: TJSONObject;
   LMiddleName: string;
 begin
   LMiddleName := Trim(AMiddleName);
 
+  Connection := TApiDatabase.NewConnection;
   LQuery := TFDQuery.Create(nil);
   try
-    LQuery.Connection := TApiDatabase.Connection;
+    LQuery.Connection := Connection;
 
     LQuery.SQL.Text :=
       'INSERT INTO core.users (' +
@@ -414,6 +422,7 @@ begin
 
   finally
     LQuery.Free;
+    Connection.Free;
   end;
 end;
 
@@ -433,6 +442,7 @@ class function TUserRepository.Update(
   const ASuperUser: Boolean
 ): string;
 var
+  Connection: TFDConnection;
   LQuery: TFDQuery;
   LJson: TJSONObject;
   LUserUuid: string;
@@ -456,9 +466,10 @@ begin
 
   LMiddleName := Trim(AMiddleName);
 
+  Connection := TApiDatabase.NewConnection;
   LQuery := TFDQuery.Create(nil);
   try
-    LQuery.Connection := TApiDatabase.Connection;
+    LQuery.Connection := Connection;
 
     LQuery.SQL.Text :=
       'UPDATE core.users SET ' +
@@ -541,6 +552,7 @@ begin
 
   finally
     LQuery.Free;
+    Connection.Free;
   end;
 end;
 
@@ -552,6 +564,7 @@ class function TUserRepository.Delete(
   const ATenantId: Int64
 ): Boolean;
 var
+  Connection: TFDConnection;
   LQuery: TFDQuery;
   LUserUuid: string;
 begin
@@ -571,9 +584,10 @@ begin
     [rfReplaceAll]
   );
 
+  Connection := TApiDatabase.NewConnection;
   LQuery := TFDQuery.Create(nil);
   try
-    LQuery.Connection := TApiDatabase.Connection;
+    LQuery.Connection := Connection;
 
     LQuery.SQL.Text :=
       'UPDATE core.users SET ' +
@@ -596,6 +610,7 @@ begin
 
   finally
     LQuery.Free;
+    Connection.Free;
   end;
 end;
 
@@ -607,6 +622,7 @@ class function TUserRepository.LoginExists(
   const AUserUuid: string
 ): Boolean;
 var
+  Connection: TFDConnection;
   LQuery: TFDQuery;
   LLoginId: string;
   LUserUuid: string;
@@ -628,9 +644,10 @@ begin
     [rfReplaceAll]
   );
 
+  Connection := TApiDatabase.NewConnection;
   LQuery := TFDQuery.Create(nil);
   try
-    LQuery.Connection := TApiDatabase.Connection;
+    LQuery.Connection := Connection;
 
     LQuery.SQL.Text :=
       'SELECT EXISTS (' +
@@ -655,6 +672,7 @@ begin
 
   finally
     LQuery.Free;
+    Connection.Free;
   end;
 end;
 
@@ -667,6 +685,7 @@ class function TUserRepository.EmailExists(
   const AUserUuid: string
 ): Boolean;
 var
+  Connection: TFDConnection;
   LQuery: TFDQuery;
   LEmail: string;
   LUserUuid: string;
@@ -688,9 +707,10 @@ begin
     [rfReplaceAll]
   );
 
+  Connection := TApiDatabase.NewConnection;
   LQuery := TFDQuery.Create(nil);
   try
-    LQuery.Connection := TApiDatabase.Connection;
+    LQuery.Connection := Connection;
 
     LQuery.SQL.Text :=
       'SELECT EXISTS (' +
@@ -719,6 +739,7 @@ begin
 
   finally
     LQuery.Free;
+    Connection.Free;
   end;
 end;
 
@@ -730,6 +751,7 @@ class function TUserRepository.SuperUserExists(
   const AUserUuid: string
 ): Boolean;
 var
+  Connection: TFDConnection;
   LQuery: TFDQuery;
   LUserUuid: string;
 begin
@@ -749,9 +771,10 @@ begin
     [rfReplaceAll]
   );
 
+  Connection := TApiDatabase.NewConnection;
   LQuery := TFDQuery.Create(nil);
   try
-    LQuery.Connection := TApiDatabase.Connection;
+    LQuery.Connection := Connection;
 
     LQuery.SQL.Text :=
       'SELECT EXISTS (' +
@@ -779,6 +802,7 @@ begin
 
   finally
     LQuery.Free;
+    Connection.Free;
   end;
 end;
 
@@ -789,14 +813,16 @@ class function TUserRepository.FindByLogin(
   const ALoginId: string
 ): string;
 var
+  Connection: TFDConnection;
   LQuery: TFDQuery;
   LJson: TJSONObject;
 begin
   Result := '';
 
+  Connection := TApiDatabase.NewConnection;
   LQuery := TFDQuery.Create(nil);
   try
-    LQuery.Connection := TApiDatabase.Connection;
+    LQuery.Connection := Connection;
 
     LQuery.SQL.Text :=
       'SELECT ' +
@@ -873,6 +899,7 @@ begin
 
   finally
     LQuery.Free;
+    Connection.Free;
   end;
 end;
 
