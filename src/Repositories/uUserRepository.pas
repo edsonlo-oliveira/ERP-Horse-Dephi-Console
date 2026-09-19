@@ -826,16 +826,35 @@ begin
 
     LQuery.SQL.Text :=
       'SELECT ' +
-      '  user_id, ' +
-      '  user_uuid, ' +
-      '  tenant_id, ' +
-      '  login_id, ' +
-      '  password_hash, ' +
-      '  status, ' +
-      '  super_user ' +
-      'FROM core.users ' +
-      'WHERE login_id = :login_id ' +
-      '  AND deleted_at IS NULL';
+      '  u.user_id, ' +
+      '  u.user_uuid, ' +
+      '  u.tenant_id, ' +
+      '  u.login_id, ' +
+      '  u.password_hash, ' +
+      '  u.status, ' +
+      '  u.super_user, ' +
+
+      '  TRIM(' +
+      '    CONCAT_WS('' '', ' +
+      '      u.first_name, ' +
+      '      NULLIF(u.middle_name, ''''), ' +
+      '      u.last_name' +
+      '    )' +
+      '  ) AS full_name, ' +
+
+      '  COALESCE(' +
+      '    NULLIF(t.trade_name, ''''), ' +
+      '    t.legal_name' +
+      '  ) AS tenant_name ' +
+
+      'FROM core.users u ' +
+
+      'INNER JOIN core.tenants t ' +
+      '  ON t.tenant_id = u.tenant_id ' +
+
+      'WHERE u.login_id = :login_id ' +
+      '  AND u.deleted_at IS NULL ' +
+      '  AND t.deleted_at IS NULL';
 
     LQuery.ParamByName('login_id').DataType :=
       ftString;
@@ -889,6 +908,16 @@ begin
         TJSONBool.Create(
           LQuery.FieldByName('super_user').AsBoolean
         )
+      );
+
+      LJson.AddPair(
+        'full_name',
+        LQuery.FieldByName('full_name').AsString
+      );
+
+      LJson.AddPair(
+        'tenant_name',
+        LQuery.FieldByName('tenant_name').AsString
       );
 
       Result := LJson.ToJSON;

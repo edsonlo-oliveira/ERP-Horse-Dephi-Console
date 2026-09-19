@@ -49,6 +49,8 @@ var
   LQuery: TFDQuery;
   LToken: string;
   LScope: string;
+  LFullName: string;
+  LTenantName:string;
 begin
   if Trim(ALoginId) = '' then
     raise Exception.Create('Login é obrigatório.');
@@ -82,11 +84,17 @@ begin
     LUserId :=
       LObject.GetValue<Int64>('user_id');
 
+    LFullName :=
+      LObject.GetValue<string>('full_name');
+
     LUserUuid :=
       LObject.GetValue<string>('user_uuid');
 
     LTenantId :=
       LObject.GetValue<Int64>('tenant_id');
+
+    LTenantName :=
+      LObject.GetValue<string>('tenant_name');
 
     LLoginId :=
       LObject.GetValue<string>('login_id');
@@ -174,8 +182,18 @@ begin
     );
 
     LObject.AddPair(
+      'tenant_name',
+      LTenantName
+    );
+
+    LObject.AddPair(
       'login_id',
       LLoginId
+    );
+
+    LObject.AddPair(
+      'full_name',
+      LFullName
     );
 
     LObject.AddPair(
