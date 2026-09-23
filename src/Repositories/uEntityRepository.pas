@@ -2,12 +2,26 @@ unit uEntityRepository;
 
 interface
 
+uses
+  FireDAC.Comp.Client, Data.DB;
+
 type
   TEntityRepository = class
+  private
+    class function IsValidSortField(
+      const AConnection: TFDConnection;
+      const AFieldName: string
+    ): Boolean; static;
+
   public
     class function List(
       const ATenantID: Int64;
-      const AGlobalScope: Boolean
+      const AGlobalScope: Boolean;
+      const ASearch: string;
+      const APage: Integer;
+      const APageSize: Integer;
+      const ASortField: string;
+      const ASortAscending: Boolean
     ): string;
 
     class function GetByUuid(
@@ -71,7 +85,6 @@ implementation
 uses
   System.SysUtils,
   System.JSON,
-  FireDAC.Comp.Client,
   FireDAC.Stan.Param,
   uApiDatabase;
 
@@ -268,26 +281,119 @@ begin
     );
 end;
 
-
 //***************************************
 //* LIST
 //***************************************
 class function TEntityRepository.List(
   const ATenantID: Int64;
-  const AGlobalScope: Boolean
+  const AGlobalScope: Boolean;
+  const ASearch: string;
+  const APage: Integer;
+  const APageSize: Integer;
+  const ASortField: string;
+  const ASortAscending: Boolean
 ): string;
 var
   Connection: TFDConnection;
   Query: TFDQuery;
+  CountQuery: TFDQuery;
+
   JSONArray: TJSONArray;
+  JSONResult: TJSONObject;
+
+  LSearch: string;
+  LOffset: Integer;
+  LSortField: string;
+  LSortDirection: string;
+
+  LTotalRecords: Int64;
+  LTotalPages: Integer;
 begin
   Connection := TApiDatabase.NewConnection;
   Query := TFDQuery.Create(nil);
+  CountQuery := TFDQuery.Create(nil);
+
   JSONArray := TJSONArray.Create;
+  JSONResult := TJSONObject.Create;
 
   try
     Query.Connection := Connection;
+    CountQuery.Connection := Connection;
 
+    LSearch := Trim(ASearch);
+    LOffset := (APage - 1) * APageSize;
+
+    //***************************************
+    //* SORT
+    //***************************************
+    LSortField :=
+      LowerCase(
+        Trim(ASortField)
+      );
+
+    if not IsValidSortField(
+      Connection,
+      LSortField
+    ) then
+    begin
+      LSortField :=
+        'legal_name';
+    end;
+
+    if ASortAscending then
+      LSortDirection := 'ASC'
+    else
+      LSortDirection := 'DESC';
+
+    //***************************************
+    //* COUNT
+    //***************************************
+    CountQuery.SQL.Text :=
+      'SELECT COUNT(*) AS total_records ' +
+      'FROM master.entities ' +
+      'WHERE deleted_at IS NULL ';
+
+    if not AGlobalScope then
+    begin
+      CountQuery.SQL.Add(
+        'AND tenant_id = :tenant_id '
+      );
+
+      CountQuery.ParamByName('tenant_id').AsLargeInt :=
+        ATenantID;
+    end;
+
+    if LSearch <> '' then
+    begin
+      CountQuery.SQL.Add(
+        'AND ( ' +
+        '       legal_name ILIKE :search ' +
+        '    OR trade_name ILIKE :search ' +
+        '    OR tax_id ILIKE :search ' +
+        '    OR email ILIKE :search ' +
+        '    OR phone ILIKE :search ' +
+        '    OR mobile_phone ILIKE :search ' +
+        ') '
+      );
+
+      CountQuery.ParamByName('search').AsString :=
+        '%' + LSearch + '%';
+    end;
+
+    CountQuery.Open;
+
+    LTotalRecords :=
+      CountQuery.FieldByName('total_records').AsLargeInt;
+
+    if LTotalRecords = 0 then
+      LTotalPages := 0
+    else
+      LTotalPages :=
+        (LTotalRecords + APageSize - 1) div APageSize;
+
+    //***************************************
+    //* DATA
+    //***************************************
     Query.SQL.Text :=
       'SELECT ' +
       '    entity_id, ' +
@@ -308,28 +414,53 @@ begin
       '    created_at, ' +
       '    updated_at, ' +
       '    deleted_at ' +
-      'FROM master.entities ';
+      'FROM master.entities ' +
+      'WHERE deleted_at IS NULL ';
 
-    if AGlobalScope then
+    if not AGlobalScope then
     begin
       Query.SQL.Add(
-        'WHERE deleted_at IS NULL '
-      );
-    end
-    else
-    begin
-      Query.SQL.Add(
-        'WHERE tenant_id = :tenant_id ' +
-        '  AND deleted_at IS NULL '
+        'AND tenant_id = :tenant_id '
       );
 
       Query.ParamByName('tenant_id').AsLargeInt :=
         ATenantID;
     end;
 
+    if LSearch <> '' then
+    begin
+      Query.SQL.Add(
+        'AND ( ' +
+        '       legal_name ILIKE :search ' +
+        '    OR trade_name ILIKE :search ' +
+        '    OR tax_id ILIKE :search ' +
+        '    OR email ILIKE :search ' +
+        '    OR phone ILIKE :search ' +
+        '    OR mobile_phone ILIKE :search ' +
+        ') '
+      );
+
+      Query.ParamByName('search').AsString :=
+        '%' + LSearch + '%';
+    end;
+
     Query.SQL.Add(
-      'ORDER BY legal_name'
+      'ORDER BY "' +
+      LSortField +
+      '" ' +
+      LSortDirection + ' '
     );
+
+    Query.SQL.Add(
+      'LIMIT :page_size ' +
+      'OFFSET :offset'
+    );
+
+    Query.ParamByName('page_size').AsInteger :=
+      APageSize;
+
+    Query.ParamByName('offset').AsInteger :=
+      LOffset;
 
     Query.Open;
 
@@ -342,14 +473,48 @@ begin
       Query.Next;
     end;
 
-    Result := JSONArray.ToJSON;
+    //***************************************
+    //* RESULT
+    //***************************************
+    JSONResult.AddPair(
+      'page',
+      TJSONNumber.Create(APage)
+    );
+
+    JSONResult.AddPair(
+      'page_size',
+      TJSONNumber.Create(APageSize)
+    );
+
+    JSONResult.AddPair(
+      'total_records',
+      TJSONNumber.Create(LTotalRecords)
+    );
+
+    JSONResult.AddPair(
+      'total_pages',
+      TJSONNumber.Create(LTotalPages)
+    );
+
+    JSONResult.AddPair(
+      'data',
+      JSONArray
+    );
+
+    JSONArray := nil;
+
+    Result := JSONResult.ToJSON;
 
   finally
     JSONArray.Free;
+    JSONResult.Free;
+
+    CountQuery.Free;
     Query.Free;
     Connection.Free;
   end;
 end;
+
 
 
 //***************************************
@@ -472,11 +637,15 @@ var
 begin
   Result := '';
 
-  Connection := TApiDatabase.NewConnection;
-  Query := TFDQuery.Create(nil);
+  Connection :=
+    TApiDatabase.NewConnection;
+
+  Query :=
+    TFDQuery.Create(nil);
 
   try
-    Query.Connection := Connection;
+    Query.Connection :=
+      Connection;
 
     Connection.StartTransaction;
 
@@ -541,73 +710,181 @@ begin
         '    updated_at, ' +
         '    deleted_at';
 
-      Query.ParamByName('tenant_id').AsLargeInt :=
+      //***************************************
+      //* TENANT ID
+      //***************************************
+      Query.ParamByName(
+        'tenant_id'
+      ).AsLargeInt :=
         ATenantID;
 
-      Query.ParamByName('entity_type').AsString :=
-        AEntityType;
+      //***************************************
+      //* ENTITY TYPE
+      //***************************************
+      Query.ParamByName(
+        'entity_type'
+      ).AsString :=
+        Trim(AEntityType);
 
-      if Trim(ATaxId) = '' then
-        Query.ParamByName('tax_id').Clear
-      else
-        Query.ParamByName('tax_id').AsString :=
-          ATaxId;
+      //***************************************
+      //* TAX ID
+      //* OPTIONAL
+      //***************************************
+      with Query.ParamByName('tax_id') do
+      begin
+        DataType :=
+          ftString;
 
-      Query.ParamByName('legal_name').AsString :=
-        ALegalName;
+        if Trim(ATaxId) = '' then
+          Clear
+        else
+          AsString :=
+            Trim(ATaxId);
+      end;
 
-      if Trim(ATradeName) = '' then
-        Query.ParamByName('trade_name').Clear
-      else
-        Query.ParamByName('trade_name').AsString :=
-          ATradeName;
+      //***************************************
+      //* LEGAL NAME
+      //***************************************
+      Query.ParamByName(
+        'legal_name'
+      ).AsString :=
+        Trim(ALegalName);
 
-      if Trim(AStateRegistration) = '' then
-        Query.ParamByName('state_registration').Clear
-      else
-        Query.ParamByName('state_registration').AsString :=
-          AStateRegistration;
+      //***************************************
+      //* TRADE NAME
+      //* OPTIONAL
+      //***************************************
+      with Query.ParamByName('trade_name') do
+      begin
+        DataType :=
+          ftString;
 
-      if Trim(AMunicipalRegistration) = '' then
-        Query.ParamByName('municipal_registration').Clear
-      else
-        Query.ParamByName('municipal_registration').AsString :=
-          AMunicipalRegistration;
+        if Trim(ATradeName) = '' then
+          Clear
+        else
+          AsString :=
+            Trim(ATradeName);
+      end;
 
-      Query.ParamByName('is_customer').AsBoolean :=
+      //***************************************
+      //* STATE REGISTRATION
+      //* OPTIONAL
+      //***************************************
+      with Query.ParamByName('state_registration') do
+      begin
+        DataType :=
+          ftString;
+
+        if Trim(AStateRegistration) = '' then
+          Clear
+        else
+          AsString :=
+            Trim(AStateRegistration);
+      end;
+
+      //***************************************
+      //* MUNICIPAL REGISTRATION
+      //* OPTIONAL
+      //***************************************
+      with Query.ParamByName('municipal_registration') do
+      begin
+        DataType :=
+          ftString;
+
+        if Trim(AMunicipalRegistration) = '' then
+          Clear
+        else
+          AsString :=
+            Trim(AMunicipalRegistration);
+      end;
+
+      //***************************************
+      //* IS CUSTOMER
+      //***************************************
+      Query.ParamByName(
+        'is_customer'
+      ).AsBoolean :=
         AIsCustomer;
 
-      Query.ParamByName('is_supplier').AsBoolean :=
+      //***************************************
+      //* IS SUPPLIER
+      //***************************************
+      Query.ParamByName(
+        'is_supplier'
+      ).AsBoolean :=
         AIsSupplier;
 
-      if Trim(AEmail) = '' then
-        Query.ParamByName('email').Clear
-      else
-        Query.ParamByName('email').AsString :=
-          AEmail;
+      //***************************************
+      //* EMAIL
+      //* OPTIONAL
+      //***************************************
+      with Query.ParamByName('email') do
+      begin
+        DataType :=
+          ftString;
 
-      if Trim(APhone) = '' then
-        Query.ParamByName('phone').Clear
-      else
-        Query.ParamByName('phone').AsString :=
-          APhone;
+        if Trim(AEmail) = '' then
+          Clear
+        else
+          AsString :=
+            Trim(AEmail);
+      end;
 
-      if Trim(AMobilePhone) = '' then
-        Query.ParamByName('mobile_phone').Clear
-      else
-        Query.ParamByName('mobile_phone').AsString :=
-          AMobilePhone;
+      //***************************************
+      //* PHONE
+      //* OPTIONAL
+      //***************************************
+      with Query.ParamByName('phone') do
+      begin
+        DataType :=
+          ftString;
 
+        if Trim(APhone) = '' then
+          Clear
+        else
+          AsString :=
+            Trim(APhone);
+      end;
+
+      //***************************************
+      //* MOBILE PHONE
+      //* OPTIONAL
+      //***************************************
+      with Query.ParamByName('mobile_phone') do
+      begin
+        DataType :=
+          ftString;
+
+        if Trim(AMobilePhone) = '' then
+          Clear
+        else
+          AsString :=
+            Trim(AMobilePhone);
+      end;
+
+      //***************************************
+      //* EXECUTE / RETURNING
+      //***************************************
       Query.Open;
 
-      JSONObject := EntityToJson(Query);
+      //***************************************
+      //* JSON RESULT
+      //***************************************
+      JSONObject :=
+        EntityToJson(
+          Query
+        );
 
       try
-        Result := JSONObject.ToJSON;
+        Result :=
+          JSONObject.ToJSON;
       finally
         JSONObject.Free;
       end;
 
+      //***************************************
+      //* COMMIT
+      //***************************************
       Connection.Commit;
 
     except
@@ -622,7 +899,6 @@ begin
     Connection.Free;
   end;
 end;
-
 
 //***************************************
 //* UPDATE
@@ -1089,4 +1365,49 @@ begin
   end;
 end;
 
+//***************************************
+//* ISVALIDSORTFIELD
+//***************************************
+class function TEntityRepository.IsValidSortField(
+  const AConnection: TFDConnection;
+  const AFieldName: string
+): Boolean;
+var
+  LQuery: TFDQuery;
+begin
+  Result := False;
+
+  if Trim(AFieldName) = '' then
+    Exit;
+
+  LQuery := TFDQuery.Create(nil);
+  try
+    LQuery.Connection := AConnection;
+
+    LQuery.SQL.Text :=
+      'SELECT 1 ' +
+      'FROM information_schema.columns ' +
+      'WHERE table_schema = :schema_name ' +
+      '  AND table_name = :table_name ' +
+      '  AND column_name = :column_name ' +
+      'LIMIT 1';
+
+    LQuery.ParamByName('schema_name').AsString :=
+      'master';
+
+    LQuery.ParamByName('table_name').AsString :=
+      'entities';
+
+    LQuery.ParamByName('column_name').AsString :=
+      LowerCase(Trim(AFieldName));
+
+    LQuery.Open;
+
+    Result :=
+      not LQuery.IsEmpty;
+
+  finally
+    LQuery.Free;
+  end;
+end;
 end.

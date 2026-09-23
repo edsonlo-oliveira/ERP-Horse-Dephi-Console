@@ -14,7 +14,12 @@ type
     class function List(
       const ATenantID: Int64;
       const ASuperUser: Boolean;
-      const AScope: string
+      const AScope: string;
+      const ASearch: string;
+      const APage: Integer;
+      const APageSize: Integer;
+      const ASortField: string;
+      const ASortAscending: Boolean
     ): string;
 
     class function GetByUuid(
@@ -109,17 +114,23 @@ begin
     );
 end;
 
-
 //***************************************
 //* LIST
 //***************************************
 class function TEntityService.List(
   const ATenantID: Int64;
   const ASuperUser: Boolean;
-  const AScope: string
+  const AScope: string;
+  const ASearch: string;
+  const APage: Integer;
+  const APageSize: Integer;
+  const ASortField: string;
+  const ASortAscending: Boolean
 ): string;
 var
   GlobalScope: Boolean;
+  Page: Integer;
+  PageSize: Integer;
 begin
   GlobalScope :=
     IsGlobalScope(
@@ -127,13 +138,29 @@ begin
       AScope
     );
 
+  Page := APage;
+  PageSize := APageSize;
+
+  if Page < 1 then
+    Page := 1;
+
+  if PageSize < 1 then
+    PageSize := 100;
+
+  if PageSize > 500 then
+    PageSize := 500;
+
   Result :=
     TEntityRepository.List(
       ATenantID,
-      GlobalScope
+      GlobalScope,
+      Trim(ASearch),
+      Page,
+      PageSize,
+      Trim(ASortField),
+      ASortAscending
     );
 end;
-
 
 //***************************************
 //* GET BY UUID

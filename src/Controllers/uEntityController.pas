@@ -60,6 +60,12 @@ class procedure TEntityController.List(
 );
 var
   LJwtContext: TJwtContext;
+  LSearch: string;
+  LPage: Integer;
+  LPageSize: Integer;
+  LSortField: string;
+  LSortAscending: Boolean;
+  LDirection: string;
 begin
   Res.ContentType(
     'application/json; charset=utf-8'
@@ -79,17 +85,74 @@ begin
     Exit;
   end;
 
+  //***************************************
+  //* SEARCH
+  //***************************************
+  LSearch :=
+    Trim(
+      Req.Query.Field('search').AsString
+    );
+
+  //***************************************
+  //* PAGE
+  //***************************************
+  LPage :=
+    StrToIntDef(
+      Req.Query.Field('page').AsString,
+      1
+    );
+
+  //***************************************
+  //* PAGE SIZE
+  //***************************************
+  LPageSize :=
+    StrToIntDef(
+      Req.Query.Field('page_size').AsString,
+      100
+    );
+
+  //***************************************
+  //* SORT FIELD
+  //***************************************
+  LSortField :=
+    Trim(
+      Req.Query.Field('sort').AsString
+    );
+
+  if LSortField = '' then
+    LSortField := 'legal_name';
+
+  //***************************************
+  //* SORT DIRECTION
+  //***************************************
+  LDirection :=
+    LowerCase(
+      Trim(
+        Req.Query.Field('direction').AsString
+      )
+    );
+
+  LSortAscending :=
+    not SameText(
+      LDirection,
+      'desc'
+    );
+
   Res.Status(200);
 
   Res.Send(
     TEntityService.List(
       LJwtContext.TenantID,
       LJwtContext.SuperUser,
-      LJwtContext.Scope
+      LJwtContext.Scope,
+      LSearch,
+      LPage,
+      LPageSize,
+      LSortField,
+      LSortAscending
     )
   );
 end;
-
 
 //***************************************
 //* GET BY UUID
