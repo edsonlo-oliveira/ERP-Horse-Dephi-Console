@@ -950,16 +950,24 @@ begin
         '  AND deleted_at IS NULL ';
 
       if not AGlobalScope then
+      begin
         ResolveQuery.SQL.Add(
           '  AND tenant_id = :tenant_id'
         );
+      end;
 
-      ResolveQuery.ParamByName('entity_uuid').AsString :=
+      ResolveQuery.ParamByName(
+        'entity_uuid'
+      ).AsString :=
         AEntityUuid;
 
       if not AGlobalScope then
-        ResolveQuery.ParamByName('tenant_id').AsLargeInt :=
+      begin
+        ResolveQuery.ParamByName(
+          'tenant_id'
+        ).AsLargeInt :=
           ATenantID;
+      end;
 
       ResolveQuery.Open;
 
@@ -970,7 +978,9 @@ begin
       end;
 
       EffectiveTenantID :=
-        ResolveQuery.FieldByName('tenant_id').AsLargeInt;
+        ResolveQuery.FieldByName(
+          'tenant_id'
+        ).AsLargeInt;
 
       ResolveQuery.Close;
 
@@ -1023,66 +1033,159 @@ begin
         '    updated_at, ' +
         '    deleted_at';
 
-      Query.ParamByName('entity_uuid').AsString :=
+      //***************************************
+      //* ENTITY UUID
+      //***************************************
+      Query.ParamByName(
+        'entity_uuid'
+      ).AsString :=
         AEntityUuid;
 
-      Query.ParamByName('tenant_id').AsLargeInt :=
+      //***************************************
+      //* TENANT ID
+      //***************************************
+      Query.ParamByName(
+        'tenant_id'
+      ).AsLargeInt :=
         EffectiveTenantID;
 
-      Query.ParamByName('entity_type').AsString :=
-        AEntityType;
+      //***************************************
+      //* ENTITY TYPE
+      //***************************************
+      Query.ParamByName(
+        'entity_type'
+      ).AsString :=
+        Trim(AEntityType);
 
-      if Trim(ATaxId) = '' then
-        Query.ParamByName('tax_id').Clear
-      else
-        Query.ParamByName('tax_id').AsString :=
-          ATaxId;
+      //***************************************
+      //* TAX ID
+      //* OPTIONAL
+      //***************************************
+      with Query.ParamByName('tax_id') do
+      begin
+        DataType := ftString;
 
-      Query.ParamByName('legal_name').AsString :=
-        ALegalName;
+        if Trim(ATaxId) = '' then
+          Clear
+        else
+          AsString := Trim(ATaxId);
+      end;
 
-      if Trim(ATradeName) = '' then
-        Query.ParamByName('trade_name').Clear
-      else
-        Query.ParamByName('trade_name').AsString :=
-          ATradeName;
+      //***************************************
+      //* LEGAL NAME
+      //***************************************
+      Query.ParamByName(
+        'legal_name'
+      ).AsString :=
+        Trim(ALegalName);
 
-      if Trim(AStateRegistration) = '' then
-        Query.ParamByName('state_registration').Clear
-      else
-        Query.ParamByName('state_registration').AsString :=
-          AStateRegistration;
+      //***************************************
+      //* TRADE NAME
+      //* OPTIONAL
+      //***************************************
+      with Query.ParamByName('trade_name') do
+      begin
+        DataType := ftString;
 
-      if Trim(AMunicipalRegistration) = '' then
-        Query.ParamByName('municipal_registration').Clear
-      else
-        Query.ParamByName('municipal_registration').AsString :=
-          AMunicipalRegistration;
+        if Trim(ATradeName) = '' then
+          Clear
+        else
+          AsString := Trim(ATradeName);
+      end;
 
-      Query.ParamByName('is_customer').AsBoolean :=
+      //***************************************
+      //* STATE REGISTRATION
+      //* OPTIONAL
+      //***************************************
+      with Query.ParamByName(
+        'state_registration'
+      ) do
+      begin
+        DataType := ftString;
+
+        if Trim(AStateRegistration) = '' then
+          Clear
+        else
+          AsString := Trim(AStateRegistration);
+      end;
+
+      //***************************************
+      //* MUNICIPAL REGISTRATION
+      //* OPTIONAL
+      //***************************************
+      with Query.ParamByName(
+        'municipal_registration'
+      ) do
+      begin
+        DataType := ftString;
+
+        if Trim(AMunicipalRegistration) = '' then
+          Clear
+        else
+          AsString := Trim(AMunicipalRegistration);
+      end;
+
+      //***************************************
+      //* IS CUSTOMER
+      //***************************************
+      Query.ParamByName(
+        'is_customer'
+      ).AsBoolean :=
         AIsCustomer;
 
-      Query.ParamByName('is_supplier').AsBoolean :=
+      //***************************************
+      //* IS SUPPLIER
+      //***************************************
+      Query.ParamByName(
+        'is_supplier'
+      ).AsBoolean :=
         AIsSupplier;
 
-      if Trim(AEmail) = '' then
-        Query.ParamByName('email').Clear
-      else
-        Query.ParamByName('email').AsString :=
-          AEmail;
+      //***************************************
+      //* EMAIL
+      //* OPTIONAL
+      //***************************************
+      with Query.ParamByName('email') do
+      begin
+        DataType := ftString;
 
-      if Trim(APhone) = '' then
-        Query.ParamByName('phone').Clear
-      else
-        Query.ParamByName('phone').AsString :=
-          APhone;
+        if Trim(AEmail) = '' then
+          Clear
+        else
+          AsString := Trim(AEmail);
+      end;
 
-      if Trim(AMobilePhone) = '' then
-        Query.ParamByName('mobile_phone').Clear
-      else
-        Query.ParamByName('mobile_phone').AsString :=
-          AMobilePhone;
+      //***************************************
+      //* PHONE
+      //* OPTIONAL
+      //***************************************
+      with Query.ParamByName('phone') do
+      begin
+        DataType := ftString;
 
+        if Trim(APhone) = '' then
+          Clear
+        else
+          AsString := Trim(APhone);
+      end;
+
+      //***************************************
+      //* MOBILE PHONE
+      //* OPTIONAL
+      //***************************************
+      with Query.ParamByName('mobile_phone') do
+      begin
+        DataType := ftString;
+
+        if Trim(AMobilePhone) = '' then
+          Clear
+        else
+          AsString := Trim(AMobilePhone);
+      end;
+
+      //***************************************
+      //* EXECUTE / RETURNING
+      //***************************************
       Query.Open;
 
       if Query.Eof then
@@ -1091,14 +1194,24 @@ begin
         Exit;
       end;
 
-      JSONObject := EntityToJson(Query);
+      //***************************************
+      //* JSON RESULT
+      //***************************************
+      JSONObject :=
+        EntityToJson(
+          Query
+        );
 
       try
-        Result := JSONObject.ToJSON;
+        Result :=
+          JSONObject.ToJSON;
       finally
         JSONObject.Free;
       end;
 
+      //***************************************
+      //* COMMIT
+      //***************************************
       Connection.Commit;
 
     except

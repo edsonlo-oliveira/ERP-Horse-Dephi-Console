@@ -48,7 +48,7 @@ uses
   System.JSON,
   uEntityService,
   uJwtService,
-  uJwtRequestContext;
+  uJwtRequestContext, uDatabaseErrorHandler, uServerLogger;
 
 
 //***************************************
@@ -269,6 +269,8 @@ var
   JsonValue: TJSONValue;
 
   LJwtContext: TJwtContext;
+
+  LErrorInfo: TDatabaseErrorInfo;
 begin
   Res.ContentType(
     'application/json; charset=utf-8'
@@ -582,6 +584,35 @@ begin
     except
       on E: Exception do
       begin
+        //***************************************
+        //* DATABASE ERROR HANDLER
+        //***************************************
+        LErrorInfo :=
+          TDatabaseErrorHandler.Handle(
+            E
+          );
+
+        //***************************************
+        //* TECHNICAL LOG
+        //***************************************
+        TServerLogger.Error(
+          'Entity.Create' +
+          sLineBreak +
+          'UserID: ' +
+          LJwtContext.UserID.ToString +
+          sLineBreak +
+          'TenantID: ' +
+          LJwtContext.TenantID.ToString +
+          sLineBreak +
+          'TargetTenantID: ' +
+          TargetTenantID.ToString +
+          sLineBreak +
+          LErrorInfo.Details
+        );
+
+        //***************************************
+        //* CLIENT RESPONSE
+        //***************************************
         Res.Status(500);
 
         Res.Send(
@@ -592,8 +623,7 @@ begin
             )
             .AddPair(
               'message',
-              'Erro interno ao criar entidade: ' +
-              E.Message
+              LErrorInfo.UserMessage
             )
             .ToJSON
         );
@@ -604,7 +634,6 @@ begin
     JsonBody.Free;
   end;
 end;
-
 
 //***************************************
 //* UPDATE
@@ -641,6 +670,7 @@ var
   JsonValue: TJSONValue;
 
   LJwtContext: TJwtContext;
+  LErrorInfo: TDatabaseErrorInfo;
 begin
   Res.ContentType(
     'application/json; charset=utf-8'
@@ -950,6 +980,35 @@ begin
     except
       on E: Exception do
       begin
+        //***************************************
+        //* DATABASE ERROR HANDLER
+        //***************************************
+        LErrorInfo :=
+          TDatabaseErrorHandler.Handle(
+            E
+          );
+
+        //***************************************
+        //* TECHNICAL LOG
+        //***************************************
+        TServerLogger.Error(
+          'Entity.Update' +
+          sLineBreak +
+          'UserID: ' +
+          LJwtContext.UserID.ToString +
+          sLineBreak +
+          'TenantID: ' +
+          LJwtContext.TenantID.ToString +
+          sLineBreak +
+          'EntityUUID: ' +
+          EntityUuid +
+          sLineBreak +
+          LErrorInfo.Details
+        );
+
+        //***************************************
+        //* CLIENT RESPONSE
+        //***************************************
         Res.Status(500);
 
         Res.Send(
@@ -960,8 +1019,7 @@ begin
             )
             .AddPair(
               'message',
-              'Erro interno ao atualizar entidade: ' +
-              E.Message
+              LErrorInfo.UserMessage
             )
             .ToJSON
         );
@@ -972,7 +1030,6 @@ begin
     JsonBody.Free;
   end;
 end;
-
 
 //***************************************
 //* SOFT DELETE
@@ -986,6 +1043,7 @@ var
   ValidUuid: Boolean;
   Deleted: Boolean;
   LJwtContext: TJwtContext;
+  LErrorInfo: TDatabaseErrorInfo;
 begin
   Res.ContentType(
     'application/json; charset=utf-8'
@@ -1021,40 +1079,99 @@ begin
     Exit;
   end;
 
-  Deleted :=
-    TEntityService.Delete(
-      EntityUuid,
-      LJwtContext.UserID,
-      LJwtContext.TenantID,
-      LJwtContext.SuperUser,
-      LJwtContext.Scope,
-      ValidUuid
-    );
+  try
+    Deleted :=
+      TEntityService.Delete(
+        EntityUuid,
+        LJwtContext.UserID,
+        LJwtContext.TenantID,
+        LJwtContext.SuperUser,
+        LJwtContext.Scope,
+        ValidUuid
+      );
 
-  if not ValidUuid then
-  begin
-    Res.Status(400);
+    //***************************************
+    //* INVALID UUID
+    //***************************************
+    if not ValidUuid then
+    begin
+      Res.Status(400);
 
-    Res.Send(
-      '{"success":false,"message":"UUID da entidade inválido."}'
-    );
+      Res.Send(
+        '{"success":false,"message":"UUID da entidade inválido."}'
+      );
 
-    Exit;
+      Exit;
+    end;
+
+    //***************************************
+    //* NOT FOUND
+    //***************************************
+    if not Deleted then
+    begin
+      Res.Status(404);
+
+      Res.Send(
+        '{"success":false,"message":"Entidade não encontrada."}'
+      );
+
+      Exit;
+    end;
+
+    //***************************************
+    //* SUCCESS
+    //***************************************
+    Res.Status(204);
+    Res.Send('');
+
+  except
+    on E: Exception do
+    begin
+      //***************************************
+      //* DATABASE ERROR HANDLER
+      //***************************************
+      LErrorInfo :=
+        TDatabaseErrorHandler.Handle(
+          E
+        );
+
+      //***************************************
+      //* TECHNICAL LOG
+      //***************************************
+      TServerLogger.Error(
+        'Entity.Delete' +
+        sLineBreak +
+        'UserID: ' +
+        LJwtContext.UserID.ToString +
+        sLineBreak +
+        'TenantID: ' +
+        LJwtContext.TenantID.ToString +
+        sLineBreak +
+        'EntityUUID: ' +
+        EntityUuid +
+        sLineBreak +
+        LErrorInfo.Details
+      );
+
+      //***************************************
+      //* CLIENT RESPONSE
+      //***************************************
+      Res.Status(500);
+
+      Res.Send(
+        TJSONObject.Create
+          .AddPair(
+            'success',
+            TJSONFalse.Create
+          )
+          .AddPair(
+            'message',
+            LErrorInfo.UserMessage
+          )
+          .ToJSON
+      );
+    end;
   end;
-
-  if not Deleted then
-  begin
-    Res.Status(404);
-
-    Res.Send(
-      '{"success":false,"message":"Entidade não encontrada."}'
-    );
-
-    Exit;
-  end;
-
-  Res.Status(204);
-  Res.Send('');
 end;
 
 
@@ -1071,6 +1188,7 @@ var
   HasDependencies: Boolean;
   Deleted: Boolean;
   LJwtContext: TJwtContext;
+  LErrorInfo: TDatabaseErrorInfo;
 begin
   Res.ContentType(
     'application/json; charset=utf-8'
@@ -1106,52 +1224,114 @@ begin
     Exit;
   end;
 
-  Deleted :=
-    TEntityService.HardDelete(
-      EntityUuid,
-      LJwtContext.UserID,
-      LJwtContext.TenantID,
-      LJwtContext.SuperUser,
-      LJwtContext.Scope,
-      ValidUuid,
-      HasDependencies
-    );
+  try
+    Deleted :=
+      TEntityService.HardDelete(
+        EntityUuid,
+        LJwtContext.UserID,
+        LJwtContext.TenantID,
+        LJwtContext.SuperUser,
+        LJwtContext.Scope,
+        ValidUuid,
+        HasDependencies
+      );
 
-  if not ValidUuid then
-  begin
-    Res.Status(400);
+    //***************************************
+    //* INVALID UUID
+    //***************************************
+    if not ValidUuid then
+    begin
+      Res.Status(400);
 
-    Res.Send(
-      '{"success":false,"message":"UUID da entidade inválido."}'
-    );
+      Res.Send(
+        '{"success":false,"message":"UUID da entidade inválido."}'
+      );
 
-    Exit;
+      Exit;
+    end;
+
+    //***************************************
+    //* HAS DEPENDENCIES
+    //***************************************
+    if HasDependencies then
+    begin
+      Res.Status(409);
+
+      Res.Send(
+        '{"success":false,"message":"A entidade não pode ser excluída definitivamente porque possui endereços cadastrados."}'
+      );
+
+      Exit;
+    end;
+
+    //***************************************
+    //* NOT FOUND
+    //***************************************
+    if not Deleted then
+    begin
+      Res.Status(404);
+
+      Res.Send(
+        '{"success":false,"message":"Entidade não encontrada."}'
+      );
+
+      Exit;
+    end;
+
+    //***************************************
+    //* SUCCESS
+    //***************************************
+    Res.Status(204);
+    Res.Send('');
+
+  except
+    on E: Exception do
+    begin
+      //***************************************
+      //* DATABASE ERROR HANDLER
+      //***************************************
+      LErrorInfo :=
+        TDatabaseErrorHandler.Handle(
+          E
+        );
+
+      //***************************************
+      //* TECHNICAL LOG
+      //***************************************
+      TServerLogger.Error(
+        'Entity.HardDelete' +
+        sLineBreak +
+        'UserID: ' +
+        LJwtContext.UserID.ToString +
+        sLineBreak +
+        'TenantID: ' +
+        LJwtContext.TenantID.ToString +
+        sLineBreak +
+        'EntityUUID: ' +
+        EntityUuid +
+        sLineBreak +
+        LErrorInfo.Details
+      );
+
+      //***************************************
+      //* CLIENT RESPONSE
+      //***************************************
+      Res.Status(500);
+
+      Res.Send(
+        TJSONObject.Create
+          .AddPair(
+            'success',
+            TJSONFalse.Create
+          )
+          .AddPair(
+            'message',
+            LErrorInfo.UserMessage
+          )
+          .ToJSON
+      );
+    end;
   end;
-
-  if HasDependencies then
-  begin
-    Res.Status(409);
-
-    Res.Send(
-      '{"success":false,"message":"A entidade não pode ser excluída definitivamente porque possui endereços cadastrados."}'
-    );
-
-    Exit;
-  end;
-
-  if not Deleted then
-  begin
-    Res.Status(404);
-
-    Res.Send(
-      '{"success":false,"message":"Entidade não encontrada."}'
-    );
-
-    Exit;
-  end;
-
-  Res.Status(204);
-  Res.Send('');
 end;
 
 end.

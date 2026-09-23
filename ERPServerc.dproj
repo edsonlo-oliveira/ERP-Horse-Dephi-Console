@@ -91,7 +91,7 @@
         <DCC_RemoteDebug>false</DCC_RemoteDebug>
     </PropertyGroup>
     <PropertyGroup Condition="'$(Cfg_1_Win64)'!=''">
-        <DCC_UnitSearchPath>$(BDSPROJECTSDIR)\ERPServer_console\modules\horse\src;$(BDSPROJECTSDIR)\ERPServer_console\src\Routes;$(BDSPROJECTSDIR)\ERPServer_console\src\Controllers;$(BDSPROJECTSDIR)\ERPServer_console\src\Services;$(BDSPROJECTSDIR)\ERPServer_console\src\Repositories;$(BDSPROJECTSDIR)\ERPServer_console\modules\jose\Source\Common;$(BDSPROJECTSDIR)\ERPServer_console\modules\jose\Source\JOSE;$(DCC_UnitSearchPath)</DCC_UnitSearchPath>
+        <DCC_UnitSearchPath>$(BDSPROJECTSDIR)\ERPServer_console\modules\horse\src;$(BDSPROJECTSDIR)\ERPServer_console\src\Routes;$(BDSPROJECTSDIR)\ERPServer_console\src\Controllers;$(BDSPROJECTSDIR)\ERPServer_console\src\Services;$(BDSPROJECTSDIR)\ERPServer_console\src\Repositories;$(BDSPROJECTSDIR)\ERPServer_console\modules\jose\Source\Common;$(BDSPROJECTSDIR)\ERPServer_console\modules\jose\Source\JOSE;$(BDSPROJECTSDIR)\ERPServer_console\modules\horse-logger\src;$(BDSPROJECTSDIR)\ERPServer_console\modules\horse-utils-clientip\src;$(DCC_UnitSearchPath)</DCC_UnitSearchPath>
         <VerInfo_Locale>1033</VerInfo_Locale>
         <Manifest_File>(None)</Manifest_File>
         <AppDPIAwarenessMode>none</AppDPIAwarenessMode>
@@ -101,8 +101,8 @@
         <VerInfo_IncludeVerInfo>true</VerInfo_IncludeVerInfo>
         <VerInfo_Debug>true</VerInfo_Debug>
         <VerInfo_AutoIncVersion>true</VerInfo_AutoIncVersion>
-        <VerInfo_Build>42</VerInfo_Build>
-        <VerInfo_Keys>CompanyName=;FileDescription=$(MSBuildProjectName);FileVersion=1.0.0.42;InternalName=;LegalCopyright=;LegalTrademarks=;OriginalFilename=;ProgramID=com.embarcadero.$(MSBuildProjectName);ProductName=$(MSBuildProjectName);ProductVersion=1.0.0.0;Comments=</VerInfo_Keys>
+        <VerInfo_Build>46</VerInfo_Build>
+        <VerInfo_Keys>CompanyName=;FileDescription=$(MSBuildProjectName);FileVersion=1.0.0.46;InternalName=;LegalCopyright=;LegalTrademarks=;OriginalFilename=;ProgramID=com.embarcadero.$(MSBuildProjectName);ProductName=$(MSBuildProjectName);ProductVersion=1.0.0.0;Comments=</VerInfo_Keys>
     </PropertyGroup>
     <PropertyGroup Condition="'$(Cfg_2)'!=''">
         <DCC_LocalDebugSymbols>false</DCC_LocalDebugSymbols>
@@ -137,6 +137,9 @@
         <DCCReference Include="src\Middleware\uJwtMiddleware.pas"/>
         <DCCReference Include="src\Utils\uHttpAuthUtils.pas"/>
         <DCCReference Include="src\Utils\uJwtRequestContext.pas"/>
+        <DCCReference Include="src\Logging\uFileLoggerProvider.pas"/>
+        <DCCReference Include="src\Utils\uDatabaseErrorHandler.pas"/>
+        <DCCReference Include="src\Logging\uServerLogger.pas"/>
         <BuildConfiguration Include="Base">
             <Key>Base</Key>
         </BuildConfiguration>
