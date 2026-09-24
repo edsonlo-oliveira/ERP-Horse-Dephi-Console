@@ -43,7 +43,11 @@ uses
   uJwtRequestContext in 'src\Utils\uJwtRequestContext.pas',
   uFileLoggerProvider in 'src\Logging\uFileLoggerProvider.pas',
   uDatabaseErrorHandler in 'src\Utils\uDatabaseErrorHandler.pas',
-  uServerLogger in 'src\Logging\uServerLogger.pas';
+  uServerLogger in 'src\Logging\uServerLogger.pas',
+  uEntityAddressRepository in 'src\Repositories\uEntityAddressRepository.pas',
+  uAuditContext in 'src\Utils\uAuditContext.pas',
+  uEntityAddressService in 'src\Services\uEntityAddressService.pas',
+  uEntityAddressController in 'src\Controllers\uEntityAddressController.pas';
 
 var
   GEncerrarLock: TCriticalSection;

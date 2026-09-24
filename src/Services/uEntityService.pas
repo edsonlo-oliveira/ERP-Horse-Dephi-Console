@@ -89,6 +89,16 @@ type
       out AValidUuid: Boolean;
       out AHasDependencies: Boolean
     ): Boolean;
+
+    class function SetActive(
+      const AEntityUuid: string;
+      const AActive: Boolean;
+      const AUserID: Int64;
+      const ATenantID: Int64;
+      const ASuperUser: Boolean;
+      const AScope: string;
+      out AValidUuid: Boolean
+    ): Boolean;
   end;
 
 implementation
@@ -562,6 +572,86 @@ begin
       GlobalScope,
       GUIDToString(UUID),
       AHasDependencies
+    );
+end;
+
+//***************************************
+//* SET ACTIVE
+//***************************************
+class function TEntityService.SetActive(
+  const AEntityUuid: string;
+  const AActive: Boolean;
+  const AUserID: Int64;
+  const ATenantID: Int64;
+  const ASuperUser: Boolean;
+  const AScope: string;
+  out AValidUuid: Boolean
+): Boolean;
+var
+  UUID: TGUID;
+  NormalizedUuid: string;
+  GlobalScope: Boolean;
+begin
+  Result := False;
+  AValidUuid := False;
+
+  //***************************************
+  //* NORMALIZE UUID
+  //***************************************
+  NormalizedUuid :=
+    Trim(
+      AEntityUuid
+    );
+
+  if NormalizedUuid = '' then
+    Exit;
+
+  if NormalizedUuid[1] <> '{' then
+  begin
+    NormalizedUuid :=
+      '{' +
+      NormalizedUuid +
+      '}';
+  end;
+
+  //***************************************
+  //* VALIDATE UUID
+  //***************************************
+  try
+    UUID :=
+      StringToGUID(
+        NormalizedUuid
+      );
+
+    AValidUuid :=
+      True;
+
+  except
+    on E: EConvertError do
+      Exit;
+  end;
+
+  //***************************************
+  //* GLOBAL SCOPE
+  //***************************************
+  GlobalScope :=
+    IsGlobalScope(
+      ASuperUser,
+      AScope
+    );
+
+  //***************************************
+  //* REPOSITORY
+  //***************************************
+  Result :=
+    TEntityRepository.SetActive(
+      AUserID,
+      ATenantID,
+      GlobalScope,
+      GUIDToString(
+        UUID
+      ),
+      AActive
     );
 end;
 

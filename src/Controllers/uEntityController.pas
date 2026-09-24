@@ -39,6 +39,12 @@ type
       Req: THorseRequest;
       Res: THorseResponse
     );
+
+    class procedure SetActive(
+      Req: THorseRequest;
+      Res: THorseResponse;
+      Next: TProc
+    );
   end;
 
 implementation
@@ -613,7 +619,7 @@ begin
         //***************************************
         //* CLIENT RESPONSE
         //***************************************
-        Res.Status(500);
+        Res.Status(LErrorInfo.HttpStatus);
 
         Res.Send(
           TJSONObject.Create
@@ -1009,7 +1015,7 @@ begin
         //***************************************
         //* CLIENT RESPONSE
         //***************************************
-        Res.Status(500);
+        Res.Status(LErrorInfo.HttpStatus);
 
         Res.Send(
           TJSONObject.Create
@@ -1156,7 +1162,7 @@ begin
       //***************************************
       //* CLIENT RESPONSE
       //***************************************
-      Res.Status(500);
+      Res.Status(LErrorInfo.HttpStatus);
 
       Res.Send(
         TJSONObject.Create
@@ -1316,7 +1322,7 @@ begin
       //***************************************
       //* CLIENT RESPONSE
       //***************************************
-      Res.Status(500);
+      Res.Status(LErrorInfo.HttpStatus);
 
       Res.Send(
         TJSONObject.Create
@@ -1331,6 +1337,246 @@ begin
           .ToJSON
       );
     end;
+  end;
+end;
+
+//***************************************
+//* SET ACTIVE
+//***************************************
+class procedure TEntityController.SetActive(
+  Req: THorseRequest;
+  Res: THorseResponse;
+  Next: TProc
+);
+var
+  EntityUuid: string;
+  JsonBody: TJSONObject;
+  JsonValue: TJSONValue;
+  Active: Boolean;
+  ValidUuid: Boolean;
+  Updated: Boolean;
+  LJwtContext: TJwtContext;
+  LErrorInfo: TDatabaseErrorInfo;
+begin
+  Res.ContentType(
+    'application/json; charset=utf-8'
+  );
+
+  if not TryGetJwtContext(
+    Req,
+    LJwtContext
+  ) then
+  begin
+    Res.Status(401);
+
+    Res.Send(
+      '{"success":false,"message":"Contexto de autenticação não encontrado."}'
+    );
+
+    Exit;
+  end;
+
+  EntityUuid :=
+    Trim(
+      Req.Params['uuid']
+    );
+
+  if EntityUuid = '' then
+  begin
+    Res.Status(400);
+
+    Res.Send(
+      '{"success":false,"message":"UUID da entidade não informado."}'
+    );
+
+    Exit;
+  end;
+
+  JsonBody :=
+    nil;
+
+  try
+    try
+      //***************************************
+      //* BODY
+      //***************************************
+      JsonBody :=
+        TJSONObject.ParseJSONValue(
+          Req.Body
+        ) as TJSONObject;
+
+      if not Assigned(JsonBody) then
+      begin
+        Res.Status(400);
+
+        Res.Send(
+          '{"success":false,"message":"JSON inválido."}'
+        );
+
+        Exit;
+      end;
+
+      //***************************************
+      //* ACTIVE
+      //***************************************
+      JsonValue :=
+        JsonBody.GetValue(
+          'active'
+        );
+
+      if not Assigned(JsonValue) or
+         (JsonValue is TJSONNull) then
+      begin
+        Res.Status(400);
+
+        Res.Send(
+          '{"success":false,"message":"O campo active é obrigatório."}'
+        );
+
+        Exit;
+      end;
+
+      if JsonValue is TJSONBool then
+      begin
+        Active :=
+          TJSONBool(JsonValue).AsBoolean;
+      end
+      else
+      begin
+        Res.Status(400);
+
+        Res.Send(
+          '{"success":false,"message":"O campo active deve ser booleano."}'
+        );
+
+        Exit;
+      end;
+
+      //***************************************
+      //* SERVICE
+      //***************************************
+      Updated :=
+        TEntityService.SetActive(
+          EntityUuid,
+          Active,
+          LJwtContext.UserID,
+          LJwtContext.TenantID,
+          LJwtContext.SuperUser,
+          LJwtContext.Scope,
+          ValidUuid
+        );
+
+      //***************************************
+      //* INVALID UUID
+      //***************************************
+      if not ValidUuid then
+      begin
+        Res.Status(400);
+
+        Res.Send(
+          '{"success":false,"message":"UUID da entidade inválido."}'
+        );
+
+        Exit;
+      end;
+
+      //***************************************
+      //* NOT FOUND
+      //***************************************
+      if not Updated then
+      begin
+        Res.Status(404);
+
+        Res.Send(
+          '{"success":false,"message":"Entidade não encontrada."}'
+        );
+
+        Exit;
+      end;
+
+      //***************************************
+      //* SUCCESS
+      //***************************************
+      Res.Status(200);
+
+      Res.Send(
+        TJSONObject.Create
+          .AddPair(
+            'success',
+            TJSONTrue.Create
+          )
+          .AddPair(
+            'message',
+            'Status da entidade atualizado com sucesso.'
+          )
+          .AddPair(
+            'active',
+            TJSONBool.Create(
+              Active
+            )
+          )
+          .ToJSON
+      );
+
+    except
+      on E: Exception do
+      begin
+        //***************************************
+        //* DATABASE ERROR HANDLER
+        //***************************************
+        LErrorInfo :=
+          TDatabaseErrorHandler.Handle(
+            E
+          );
+
+        //***************************************
+        //* TECHNICAL LOG
+        //***************************************
+        TServerLogger.Error(
+          'Entity.SetActive' +
+          sLineBreak +
+          'UserID: ' +
+          LJwtContext.UserID.ToString +
+          sLineBreak +
+          'TenantID: ' +
+          LJwtContext.TenantID.ToString +
+          sLineBreak +
+          'EntityUUID: ' +
+          EntityUuid +
+          sLineBreak +
+          'Active: ' +
+          BoolToStr(
+            Active,
+            True
+          ) +
+          sLineBreak +
+          LErrorInfo.Details
+        );
+
+        //***************************************
+        //* CLIENT RESPONSE
+        //***************************************
+        Res.Status(
+          LErrorInfo.HttpStatus
+        );
+
+        Res.Send(
+          TJSONObject.Create
+            .AddPair(
+              'success',
+              TJSONFalse.Create
+            )
+            .AddPair(
+              'message',
+              LErrorInfo.UserMessage
+            )
+            .ToJSON
+        );
+      end;
+    end;
+
+  finally
+    JsonBody.Free;
   end;
 end;
 

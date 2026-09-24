@@ -11,6 +11,7 @@ type
   TDatabaseErrorInfo = record
     UserMessage: string;
     Details: string;
+    HttpStatus: Integer;
   end;
 
   TDatabaseErrorHandler = class
@@ -32,6 +33,12 @@ var
   Msg: string;
   MsgLower: string;
 begin
+  //***************************************
+  //* DEFAULT HTTP STATUS
+  //***************************************
+  Result.HttpStatus :=
+    500;
+
   Msg :=
     E.Message;
 
@@ -75,10 +82,13 @@ begin
     (Pos('violates unique constraint', MsgLower) > 0)
   then
   begin
+    Result.HttpStatus :=
+      409;
+
     Result.UserMessage :=
-      'Não foi possível criar o registro.' +
+      'Não foi possível salvar o registro.' +
       sLineBreak +
-      'Já existe um registro com os mesmos dados.';
+      'Já existe outro registro com os mesmos dados.';
 
     Exit;
   end;
@@ -92,6 +102,9 @@ begin
     (Pos('violates foreign key', MsgLower) > 0)
   then
   begin
+    Result.HttpStatus :=
+      409;
+
     Result.UserMessage :=
       'Não foi possível realizar a operação.' +
       sLineBreak +
@@ -109,6 +122,9 @@ begin
     (Pos('null value in column', MsgLower) > 0)
   then
   begin
+    Result.HttpStatus :=
+      400;
+
     Result.UserMessage :=
       'Não foi possível salvar o registro.' +
       sLineBreak +
@@ -126,6 +142,9 @@ begin
     (Pos('violates check constraint', MsgLower) > 0)
   then
   begin
+    Result.HttpStatus :=
+      400;
+
     Result.UserMessage :=
       'Não foi possível salvar o registro.' +
       sLineBreak +
@@ -142,6 +161,9 @@ begin
     (Pos('permission denied', MsgLower) > 0)
   then
   begin
+    Result.HttpStatus :=
+      403;
+
     Result.UserMessage :=
       'Você não possui permissão para realizar esta operação.';
 
@@ -157,6 +179,9 @@ begin
     (Pos('server closed the connection unexpectedly', MsgLower) > 0)
   then
   begin
+    Result.HttpStatus :=
+      503;
+
     Result.UserMessage :=
       'Não foi possível conectar ao banco de dados.' +
       sLineBreak +
@@ -177,6 +202,9 @@ begin
     )
   then
   begin
+    Result.HttpStatus :=
+      503;
+
     Result.UserMessage :=
       'Não foi possível conectar ao banco de dados.' +
       sLineBreak +
@@ -186,13 +214,16 @@ begin
   end;
 
   //***************************************
-  //* SQL SYNTAX ERROR
+  //* SQL SYNTAX ERROR - 42601
   //***************************************
   if
     (Pos('syntax error', MsgLower) > 0) or
     (Pos('42601', MsgLower) > 0)
   then
   begin
+    Result.HttpStatus :=
+      500;
+
     Result.UserMessage :=
       'Ocorreu um erro interno na operação com o banco de dados.';
 

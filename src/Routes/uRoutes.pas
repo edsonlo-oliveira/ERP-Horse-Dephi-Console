@@ -12,6 +12,7 @@ uses
   uTenantController,
   uUserController,
   uAuthController,
+  uEntityAddressController,
   uJwtMiddleware;
 
 procedure RegisterRoutes;
@@ -33,6 +34,16 @@ begin
   THorse.Put('/api/v1/entities/:uuid', TEntityController.Update);
   THorse.Delete('/api/v1/entities/:uuid', TEntityController.Delete);
   THorse.Delete('/api/v1/entities/:uuid/permanent', TEntityController.HardDelete);
+  THorse.Put('/api/v1/entities/:uuid/status', TEntityController.SetActive);
+
+  //***************************************
+  //* ENTITY ADDRESSES
+  //***************************************
+  THorse.Get('/api/v1/entities/:uuid/addresses', TEntityAddressController.List);
+  THorse.Get('/api/v1/entities/:uuid/addresses/:address_id', TEntityAddressController.GetById);
+  THorse.Post('/api/v1/entities/:uuid/addresses', TEntityAddressController.Create);
+  THorse.Put('/api/v1/entities/:uuid/addresses/:address_id', TEntityAddressController.Update);
+  THorse.Delete('/api/v1/entities/:uuid/addresses/:address_id', TEntityAddressController.Delete);
 
   //***************************************
   //* TENANTS

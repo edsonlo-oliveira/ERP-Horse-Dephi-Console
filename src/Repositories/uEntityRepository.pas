@@ -3,7 +3,7 @@ unit uEntityRepository;
 interface
 
 uses
-  FireDAC.Comp.Client, Data.DB;
+  FireDAC.Comp.Client, Data.DB, uAuditContext;
 
 type
   TEntityRepository = class
@@ -78,6 +78,14 @@ type
       const AEntityUuid: string;
       out AHasDependencies: Boolean
     ): Boolean;
+
+    class function SetActive(
+      const AUserID: Int64;
+      const ATenantID: Int64;
+      const AGlobalScope: Boolean;
+      const AEntityUuid: string;
+      const AActive: Boolean
+    ): Boolean;
   end;
 
 implementation
@@ -87,40 +95,6 @@ uses
   System.JSON,
   FireDAC.Stan.Param,
   uApiDatabase;
-
-
-//***************************************
-//* AUDIT CONTEXT
-//***************************************
-procedure SetAuditContext(
-  const AConnection: TFDConnection;
-  const AUserID: Int64;
-  const ATenantID: Int64
-);
-var
-  ContextQuery: TFDQuery;
-begin
-  ContextQuery := TFDQuery.Create(nil);
-  try
-    ContextQuery.Connection := AConnection;
-
-    ContextQuery.SQL.Text :=
-      'SELECT ' +
-      'set_config(''app.user_id'', :user_id, true), ' +
-      'set_config(''app.tenant_id'', :tenant_id, true)';
-
-    ContextQuery.ParamByName('user_id').AsString :=
-      AUserID.ToString;
-
-    ContextQuery.ParamByName('tenant_id').AsString :=
-      ATenantID.ToString;
-
-    ContextQuery.Open;
-
-  finally
-    ContextQuery.Free;
-  end;
-end;
 
 
 //***************************************
@@ -1523,4 +1497,142 @@ begin
     LQuery.Free;
   end;
 end;
+
+//***************************************
+//* SET ACTIVE
+//***************************************
+class function TEntityRepository.SetActive(
+  const AUserID: Int64;
+  const ATenantID: Int64;
+  const AGlobalScope: Boolean;
+  const AEntityUuid: string;
+  const AActive: Boolean
+): Boolean;
+var
+  Connection: TFDConnection;
+  Query: TFDQuery;
+  ResolveQuery: TFDQuery;
+  EffectiveTenantID: Int64;
+begin
+  Result := False;
+
+  Connection :=
+    TApiDatabase.NewConnection;
+
+  Query :=
+    TFDQuery.Create(nil);
+
+  ResolveQuery :=
+    TFDQuery.Create(nil);
+
+  try
+    Query.Connection :=
+      Connection;
+
+    ResolveQuery.Connection :=
+      Connection;
+
+    Connection.StartTransaction;
+
+    try
+      //***************************************
+      //* RESOLVE TARGET TENANT
+      //***************************************
+      ResolveQuery.SQL.Text :=
+        'SELECT tenant_id ' +
+        'FROM master.entities ' +
+        'WHERE entity_uuid = CAST(:entity_uuid AS uuid) ' +
+        '  AND deleted_at IS NULL ';
+
+      if not AGlobalScope then
+      begin
+        ResolveQuery.SQL.Add(
+          '  AND tenant_id = :tenant_id'
+        );
+      end;
+
+      ResolveQuery.ParamByName(
+        'entity_uuid'
+      ).AsString :=
+        AEntityUuid;
+
+      if not AGlobalScope then
+      begin
+        ResolveQuery.ParamByName(
+          'tenant_id'
+        ).AsLargeInt :=
+          ATenantID;
+      end;
+
+      ResolveQuery.Open;
+
+      if ResolveQuery.Eof then
+      begin
+        Connection.Commit;
+        Exit;
+      end;
+
+      EffectiveTenantID :=
+        ResolveQuery.FieldByName(
+          'tenant_id'
+        ).AsLargeInt;
+
+      ResolveQuery.Close;
+
+      //***************************************
+      //* AUDIT CONTEXT
+      //***************************************
+      SetAuditContext(
+        Connection,
+        AUserID,
+        EffectiveTenantID
+      );
+
+      //***************************************
+      //* UPDATE ACTIVE
+      //***************************************
+      Query.SQL.Text :=
+        'UPDATE master.entities SET ' +
+        '    active = :active, ' +
+        '    updated_at = CURRENT_TIMESTAMP ' +
+        'WHERE entity_uuid = CAST(:entity_uuid AS uuid) ' +
+        '  AND tenant_id = :tenant_id ' +
+        '  AND deleted_at IS NULL';
+
+      Query.ParamByName(
+        'active'
+      ).AsBoolean :=
+        AActive;
+
+      Query.ParamByName(
+        'entity_uuid'
+      ).AsString :=
+        AEntityUuid;
+
+      Query.ParamByName(
+        'tenant_id'
+      ).AsLargeInt :=
+        EffectiveTenantID;
+
+      Query.ExecSQL;
+
+      Result :=
+        Query.RowsAffected > 0;
+
+      Connection.Commit;
+
+    except
+      if Connection.InTransaction then
+        Connection.Rollback;
+
+      raise;
+    end;
+
+  finally
+    ResolveQuery.Free;
+    Query.Free;
+    Connection.Free;
+  end;
+end;
+
 end.
