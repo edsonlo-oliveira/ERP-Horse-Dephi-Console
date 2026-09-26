@@ -7,6 +7,7 @@ uses
   System.Classes,
   System.JSON,
   System.IOUtils,
+  System.Generics.Collections,
   Horse.Logger.Provider.Contract,
   Horse.Logger.Types;
 

@@ -79,8 +79,6 @@ uses
 //* USERTOJSON
 //***************************************
 function UserToJson(AQuery: TFDQuery): TJSONObject;
-var
-  LValue: TJSONValue;
 begin
   Result := TJSONObject.Create;
 
@@ -169,7 +167,6 @@ begin
       AQuery.FieldByName('deleted_at').AsString
     );
 
-  LValue := nil;
 end;
 
 //***************************************

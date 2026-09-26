@@ -1395,6 +1395,8 @@ begin
   JsonBody :=
     nil;
 
+  Active := False;
+
   try
     try
       //***************************************

@@ -47,7 +47,10 @@ uses
   uEntityAddressRepository in 'src\Repositories\uEntityAddressRepository.pas',
   uAuditContext in 'src\Utils\uAuditContext.pas',
   uEntityAddressService in 'src\Services\uEntityAddressService.pas',
-  uEntityAddressController in 'src\Controllers\uEntityAddressController.pas';
+  uEntityAddressController in 'src\Controllers\uEntityAddressController.pas',
+  uProductCategoryRepository in 'src\Repositories\uProductCategoryRepository.pas',
+  uProductCategoryService in 'src\Services\uProductCategoryService.pas',
+  uProductCategoryController in 'src\Controllers\uProductCategoryController.pas';
 
 var
   GEncerrarLock: TCriticalSection;

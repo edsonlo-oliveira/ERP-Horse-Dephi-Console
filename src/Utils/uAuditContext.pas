@@ -3,7 +3,7 @@ unit uAuditContext;
 interface
 
 uses
-  FireDAC.Comp.Client;
+  FireDAC.Comp.Client, FireDAC.Stan.Param;
 
 procedure SetAuditContext(
   const AConnection: TFDConnection;

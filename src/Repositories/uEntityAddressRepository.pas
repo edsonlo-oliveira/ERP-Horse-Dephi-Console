@@ -5,8 +5,10 @@ interface
 uses
   System.SysUtils,
   System.JSON,
+  System.Generics.Collections,
   Data.DB,
   FireDAC.Comp.Client,
+  FireDAC.Stan.Param,
   uAuditContext;
 
 type

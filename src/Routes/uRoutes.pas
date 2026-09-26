@@ -13,7 +13,8 @@ uses
   uUserController,
   uAuthController,
   uEntityAddressController,
-  uJwtMiddleware;
+  uJwtMiddleware,
+  uProductCategoryController;
 
 procedure RegisterRoutes;
 begin
@@ -62,6 +63,17 @@ begin
   THorse.Post('/api/v1/users', TUserController.Create);
   THorse.Put('/api/v1/users/:uuid', TUserController.Update);
   THorse.Delete('/api/v1/users/:uuid', TUserController.Delete);
+
+  //***************************************
+  //* PRODUCT CATEGORIES
+  //***************************************
+  THorse.Get('/api/v1/product-categories', TProductCategoryController.List);
+  THorse.Get('/api/v1/product-categories/:uuid', TProductCategoryController.GetByUuid);
+  THorse.Post('/api/v1/product-categories', TProductCategoryController.Create);
+  THorse.Put('/api/v1/product-categories/:uuid', TProductCategoryController.Update);
+  THorse.Delete('/api/v1/product-categories/:uuid', TProductCategoryController.Delete);
+  THorse.Patch('/api/v1/product-categories/:uuid/active', TProductCategoryController.SetActive);
+  THorse.Delete('/api/v1/product-categories/:uuid/permanent', TProductCategoryController.HardDelete);
 
   //***************************************
   //* AUTHENTICATION
