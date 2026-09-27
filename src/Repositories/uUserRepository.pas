@@ -34,6 +34,10 @@ type
       const ATenantId: Int64
     ): string;
 
+    class function GetByUuidGlobal(
+      const AUserUuid: string
+    ): string;
+
     class function GetByUuid(
       const AUserUuid: string;
       const ATenantId: Int64
@@ -63,6 +67,9 @@ type
     class function FindByLogin(
       const ALoginId: string
     ): string;
+
+    class function ListAll: string;
+
     end;
 
 implementation
@@ -919,6 +926,150 @@ begin
 
       Result := LJson.ToJSON;
 
+    finally
+      LJson.Free;
+    end;
+
+  finally
+    LQuery.Free;
+    Connection.Free;
+  end;
+end;
+
+//***************************************
+//* LIST ALL
+//* SUPERUSER - GLOBAL
+//***************************************
+class function TUserRepository.ListAll: string;
+var
+  Connection: TFDConnection;
+  LQuery: TFDQuery;
+  LArray: TJSONArray;
+begin
+  Connection := TApiDatabase.NewConnection;
+  LQuery := TFDQuery.Create(nil);
+  try
+    LQuery.Connection := Connection;
+
+    LQuery.SQL.Text :=
+      'SELECT ' +
+      '  user_id, ' +
+      '  user_uuid::text AS user_uuid, ' +
+      '  tenant_id, ' +
+      '  login_id, ' +
+      '  first_name, ' +
+      '  middle_name, ' +
+      '  last_name, ' +
+      '  email, ' +
+      '  status, ' +
+      '  super_user, ' +
+      '  last_login_at, ' +
+      '  created_at, ' +
+      '  updated_at, ' +
+      '  deleted_at ' +
+      'FROM core.users ' +
+      'WHERE deleted_at IS NULL ' +
+      'ORDER BY tenant_id, first_name, last_name, login_id';
+
+    LQuery.Open;
+
+    LArray := TJSONArray.Create;
+    try
+      while not LQuery.Eof do
+      begin
+        LArray.AddElement(
+          UserToJson(LQuery)
+        );
+
+        LQuery.Next;
+      end;
+
+      Result :=
+        LArray.ToJSON;
+
+    finally
+      LArray.Free;
+    end;
+
+  finally
+    LQuery.Free;
+    Connection.Free;
+  end;
+end;
+
+//***************************************
+//* GETBYUUID GLOBAL
+//* SUPERUSER - GLOBAL
+//***************************************
+class function TUserRepository.GetByUuidGlobal(
+  const AUserUuid: string
+): string;
+var
+  Connection: TFDConnection;
+  LQuery: TFDQuery;
+  LUserUuid: string;
+  LJson: TJSONObject;
+begin
+  LUserUuid := Trim(AUserUuid);
+
+  LUserUuid := StringReplace(
+    LUserUuid,
+    '{',
+    '',
+    [rfReplaceAll]
+  );
+
+  LUserUuid := StringReplace(
+    LUserUuid,
+    '}',
+    '',
+    [rfReplaceAll]
+  );
+
+  Connection := TApiDatabase.NewConnection;
+  LQuery := TFDQuery.Create(nil);
+  try
+    LQuery.Connection := Connection;
+
+    LQuery.SQL.Text :=
+      'SELECT ' +
+      '  user_id, ' +
+      '  user_uuid::text AS user_uuid, ' +
+      '  tenant_id, ' +
+      '  login_id, ' +
+      '  first_name, ' +
+      '  middle_name, ' +
+      '  last_name, ' +
+      '  email, ' +
+      '  status, ' +
+      '  super_user, ' +
+      '  last_login_at, ' +
+      '  created_at, ' +
+      '  updated_at, ' +
+      '  deleted_at ' +
+      'FROM core.users ' +
+      'WHERE user_uuid = CAST(:user_uuid AS uuid) ' +
+      '  AND deleted_at IS NULL';
+
+    LQuery.ParamByName('user_uuid').DataType :=
+      ftString;
+
+    LQuery.ParamByName('user_uuid').AsString :=
+      LUserUuid;
+
+    LQuery.Open;
+
+    if LQuery.Eof then
+      Exit('');
+
+    LJson :=
+      UserToJson(
+        LQuery
+      );
+
+    try
+      Result :=
+        LJson.ToJSON;
     finally
       LJson.Free;
     end;

@@ -46,8 +46,7 @@ uses
   System.JSON,
   uUserService,
   uJwtService,
-  uJwtRequestContext,
-  uTenantRepository;
+  uJwtRequestContext;
 
 
 //***************************************
@@ -86,7 +85,8 @@ begin
 
     LJson :=
       TUserService.List(
-        LJwtContext.TenantID
+        LJwtContext.TenantID,
+        LJwtContext.SuperUser
       );
 
     Res.Status(200).Send(
@@ -174,7 +174,8 @@ begin
     LJson :=
       TUserService.GetByUuid(
         LUuid,
-        LJwtContext.TenantID
+        LJwtContext.TenantID,
+        LJwtContext.SuperUser
       );
 
     if LJson = '' then
@@ -460,7 +461,6 @@ var
   LSuperUser: Boolean;
 
   LJwtContext: TJwtContext;
-  LTenantIsMaster: Boolean;
 
   LResult: string;
 begin
@@ -553,11 +553,6 @@ begin
         Exit;
       end;
 
-      LTenantIsMaster :=
-        TTenantRepository.IsMaster(
-          LJwtContext.TenantID
-        );
-
       LObject :=
         TJSONObject(LJson);
 
@@ -618,7 +613,7 @@ begin
           LPassword,
           LStatus,
           LSuperUser,
-          LTenantIsMaster
+          LJwtContext.SuperUser
         );
 
       if LResult = '' then
@@ -696,7 +691,6 @@ var
   LDeleted: Boolean;
 
   LJwtContext: TJwtContext;
-  LTenantIsMaster: Boolean;
 begin
   try
     LUuid :=
@@ -743,16 +737,11 @@ begin
       Exit;
     end;
 
-    LTenantIsMaster :=
-      TTenantRepository.IsMaster(
-        LJwtContext.TenantID
-      );
-
     LDeleted :=
       TUserService.Delete(
         LJwtContext.TenantID,
         LUuid,
-        LTenantIsMaster
+        LJwtContext.SuperUser
       );
 
     if not LDeleted then
