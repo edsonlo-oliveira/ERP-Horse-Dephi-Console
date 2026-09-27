@@ -14,7 +14,8 @@ uses
   uAuthController,
   uEntityAddressController,
   uJwtMiddleware,
-  uProductCategoryController;
+  uProductCategoryController,
+  uTenantAddressController;
 
 procedure RegisterRoutes;
 begin
@@ -56,6 +57,15 @@ begin
   THorse.Patch('/api/v1/tenants/:uuid/status', TTenantController.ChangeStatus);
   THorse.Delete('/api/v1/tenants/:uuid', TTenantController.Delete);
   THorse.Delete('/api/v1/tenants/:uuid/permanent', TTenantController.HardDelete);
+
+  //***************************************
+  //* TENANT ADDRESSES
+  //***************************************
+  THorse.Get('/api/v1/tenants/:tenant_uuid/addresses', TTenantAddressController.List  );
+  THorse.Get('/api/v1/tenants/:tenant_uuid/addresses/:address_uuid', TTenantAddressController.GetByUuid);
+  THorse.Post('/api/v1/tenants/:tenant_uuid/addresses', TTenantAddressController.Create);
+  THorse.Put('/api/v1/tenants/:tenant_uuid/addresses/:address_uuid', TTenantAddressController.Update);
+  THorse.Delete('/api/v1/tenants/:tenant_uuid/addresses/:address_uuid', TTenantAddressController.Delete);
 
   //***************************************
   //* USERS

@@ -1581,7 +1581,6 @@ var
 
   LUuid: string;
 begin
-  Result := False;
 
   LUuid :=
     NormalizeUuid(
@@ -1757,7 +1756,6 @@ var
   Query: TFDQuery;
   LUuid: string;
 begin
-  Result := False;
 
   LUuid :=
     NormalizeUuid(

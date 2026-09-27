@@ -50,7 +50,10 @@ uses
   uProductCategoryService in 'src\Services\uProductCategoryService.pas',
   uProductCategoryController in 'src\Controllers\uProductCategoryController.pas',
   uDatabaseUtils in 'src\Utils\uDatabaseUtils.pas',
-  uHttpResponseUtils in 'src\Utils\uHttpResponseUtils.pas';
+  uHttpResponseUtils in 'src\Utils\uHttpResponseUtils.pas',
+  uTenantAddressRepository in 'src\Repositories\uTenantAddressRepository.pas',
+  uTenantAddressService in 'src\Services\uTenantAddressService.pas',
+  uTenantAddressController in 'src\Controllers\uTenantAddressController.pas';
 
 var
   GEncerrarLock: TCriticalSection;
