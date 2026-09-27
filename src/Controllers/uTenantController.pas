@@ -8,11 +8,40 @@ uses
 type
   TTenantController = class
   public
-    class procedure List(Req: THorseRequest; Res: THorseResponse; Next: TProc);
-    class procedure GetByUuid(Req: THorseRequest; Res: THorseResponse);
-    class procedure Create(Req: THorseRequest; Res: THorseResponse; Next: TProc);
-    class procedure Update(Req: THorseRequest; Res: THorseResponse; Next: TProc);
-    class procedure Delete(Req: THorseRequest; Res: THorseResponse; Next: TProc);
+    class procedure List(
+      Req: THorseRequest;
+      Res: THorseResponse
+    );
+
+    class procedure GetByUuid(
+      Req: THorseRequest;
+      Res: THorseResponse
+    );
+
+    class procedure Create(
+      Req: THorseRequest;
+      Res: THorseResponse
+    );
+
+    class procedure Update(
+      Req: THorseRequest;
+      Res: THorseResponse
+    );
+
+    class procedure ChangeStatus(
+      Req: THorseRequest;
+      Res: THorseResponse
+    );
+
+    class procedure Delete(
+      Req: THorseRequest;
+      Res: THorseResponse
+    );
+
+    class procedure HardDelete(
+      Req: THorseRequest;
+      Res: THorseResponse
+    );
   end;
 
 implementation
@@ -20,93 +49,259 @@ implementation
 uses
   System.SysUtils,
   System.JSON,
-  uTenantService;
+  uTenantService,
+  uJwtService,
+  uJwtRequestContext,
+  uHttpResponseUtils;
 
-{***************************************}
-{* LIST }
-{***************************************}
+
+//***************************************
+//* LIST
+//***************************************
 class procedure TTenantController.List(
   Req: THorseRequest;
-  Res: THorseResponse;
-  Next: TProc
+  Res: THorseResponse
 );
+var
+  LJwtContext: TJwtContext;
+
+  LSearch: string;
+  LSortField: string;
+  LSortDirection: string;
+
+  LPage: Integer;
+  LPageSize: Integer;
+
+  LErrorMessage: string;
+  LForbidden: Boolean;
+  LResult: string;
 begin
+  Res.ContentType(
+    'application/json; charset=utf-8'
+  );
+
+  //***************************************
+  //* JWT CONTEXT
+  //***************************************
+  if not TryGetJwtContext(
+    Req,
+    LJwtContext
+  ) then
+  begin
+    THttpResponseUtils.SendError(
+      Res,
+      401,
+      'Contexto de autenticação não encontrado.'
+    );
+
+    Exit;
+  end;
+
+  //***************************************
+  //* QUERY PARAMS
+  //***************************************
+  LSearch :=
+    Trim(
+      Req.Query['search']
+    );
+
+  LSortField :=
+    Trim(
+      Req.Query['sort_field']
+    );
+
+  LSortDirection :=
+    Trim(
+      Req.Query['sort_direction']
+    );
+
+  if not TryStrToInt(
+    Trim(
+      Req.Query['page']
+    ),
+    LPage
+  ) then
+    LPage := 1;
+
+  if not TryStrToInt(
+    Trim(
+      Req.Query['page_size']
+    ),
+    LPageSize
+  ) then
+    LPageSize := 100;
+
+  if LSortField = '' then
+    LSortField :=
+      'legal_name';
+
+  if LSortDirection = '' then
+    LSortDirection :=
+      'ASC';
+
+  //***************************************
+  //* SERVICE
+  //***************************************
   try
-    Res
-      .Status(200)
-      .ContentType('application/json')
-      .Send(TTenantService.List);
+    LResult :=
+      TTenantService.List(
+        LJwtContext.SuperUser,
+        LJwtContext.Scope,
+        LSearch,
+        LPage,
+        LPageSize,
+        LSortField,
+        LSortDirection,
+        LErrorMessage,
+        LForbidden
+      );
+
+    if LForbidden then
+    begin
+      THttpResponseUtils.SendError(
+        Res,
+        403,
+        LErrorMessage
+      );
+
+      Exit;
+    end;
+
+    if LErrorMessage <> '' then
+    begin
+      THttpResponseUtils.SendError(
+        Res,
+        400,
+        LErrorMessage
+      );
+
+      Exit;
+    end;
+
+    Res.Status(200);
+    Res.Send(LResult);
+
   except
     on E: Exception do
-      Res
-        .Status(500)
-        .ContentType('application/json')
-        .Send(
-          TJSONObject.Create
-            .AddPair('success', TJSONBool.Create(False))
-            .AddPair('message', E.Message)
-            .ToString
-        );
+      THttpResponseUtils.HandleDatabaseError(
+        Res,
+        E
+      );
   end;
 end;
 
+
 //***************************************
-//* GETBYUUID
+//* GET BY UUID
 //***************************************
 class procedure TTenantController.GetByUuid(
   Req: THorseRequest;
   Res: THorseResponse
 );
 var
-  TenantUuid: string;
-  JsonResult: string;
-  ValidUuid: Boolean;
+  LJwtContext: TJwtContext;
+
+  LTenantUuid: string;
+  LResult: string;
+  LErrorMessage: string;
+
+  LForbidden: Boolean;
+  LValidUuid: Boolean;
 begin
-  TenantUuid := Trim(
-    Req.Params['uuid']
+  Res.ContentType(
+    'application/json; charset=utf-8'
   );
 
-  if TenantUuid = '' then
-  begin
-    Res.Status(400);
+  LTenantUuid :=
+    Trim(
+      Req.Params['uuid']
+    );
 
-    Res.Send(
-      '{"success":false,"message":"UUID do tenant não informado."}'
+  if LTenantUuid = '' then
+  begin
+    THttpResponseUtils.SendError(
+      Res,
+      400,
+      'UUID do tenant não informado.'
     );
 
     Exit;
   end;
 
-  JsonResult := TTenantService.GetByUuid(
-    TenantUuid,
-    ValidUuid
-  );
-
-  if not ValidUuid then
+  //***************************************
+  //* JWT CONTEXT
+  //***************************************
+  if not TryGetJwtContext(
+    Req,
+    LJwtContext
+  ) then
   begin
-    Res.Status(400);
-
-    Res.Send(
-      '{"success":false,"message":"UUID do tenant inválido."}'
+    THttpResponseUtils.SendError(
+      Res,
+      401,
+      'Contexto de autenticação não encontrado.'
     );
 
     Exit;
   end;
 
-  if JsonResult = '' then
-  begin
-    Res.Status(404);
+  //***************************************
+  //* SERVICE
+  //***************************************
+  try
+    LResult :=
+      TTenantService.GetByUuid(
+        LJwtContext.SuperUser,
+        LJwtContext.Scope,
+        LTenantUuid,
+        LErrorMessage,
+        LForbidden,
+        LValidUuid
+      );
 
-    Res.Send(
-      '{"success":false,"message":"Tenant não encontrado."}'
-    );
+    if not LValidUuid then
+    begin
+      THttpResponseUtils.SendError(
+        Res,
+        400,
+        LErrorMessage
+      );
 
-    Exit;
+      Exit;
+    end;
+
+    if LForbidden then
+    begin
+      THttpResponseUtils.SendError(
+        Res,
+        403,
+        LErrorMessage
+      );
+
+      Exit;
+    end;
+
+    if LResult = '' then
+    begin
+      THttpResponseUtils.SendError(
+        Res,
+        404,
+        LErrorMessage
+      );
+
+      Exit;
+    end;
+
+    Res.Status(200);
+    Res.Send(LResult);
+
+  except
+    on E: Exception do
+      THttpResponseUtils.HandleDatabaseError(
+        Res,
+        E
+      );
   end;
-
-  Res.ContentType('application/json; charset=utf-8');
-  Res.Status(200);
-  Res.Send(JsonResult);
 end;
 
 //***************************************
@@ -114,721 +309,1324 @@ end;
 //***************************************
 class procedure TTenantController.Create(
   Req: THorseRequest;
-  Res: THorseResponse;
-  Next: TProc
+  Res: THorseResponse
 );
 var
-  JsonBody: TJSONObject;
+  LJwtContext: TJwtContext;
+  LJsonBody: TJSONObject;
+  LJsonValue: TJSONValue;
 
-  LegalName: string;
-  TradeName: string;
-  TaxId: string;
-  StateRegistration: string;
-  MunicipalRegistration: string;
+  LLegalName: string;
+  LTradeName: string;
+  LTaxId: string;
+  LStateRegistration: string;
+  LMunicipalRegistration: string;
 
-  Email: string;
-  Phone: string;
-  MobilePhone: string;
-  WebsiteUrl: string;
-  LogoUrl: string;
+  LEmail: string;
+  LPhone: string;
+  LMobilePhone: string;
 
-  Timezone: string;
-  CurrencyCode: string;
-  LocaleCode: string;
-  Status: string;
+  LWebsiteUrl: string;
+  LLogoUrl: string;
 
-  IsMaster: Boolean;
+  LTimezone: string;
+  LCurrencyCode: string;
+  LLocaleCode: string;
+  LStatus: string;
 
-  JsonResult: string;
-  ErrorMessage: string;
-  JsonValue: TJSONValue;
+  LResult: string;
+  LErrorMessage: string;
+  LForbidden: Boolean;
 begin
-  Res.ContentType('application/json; charset=utf-8');
+  Res.ContentType(
+    'application/json; charset=utf-8'
+  );
 
-  JsonBody := nil;
+  LJsonBody := nil;
 
   try
-    try
-      // ---------------------------------------------------------
-      // Converte o corpo da requisição para JSON
-      // ---------------------------------------------------------
-      JsonBody := TJSONObject.ParseJSONValue(
-        Req.Body
-      ) as TJSONObject;
 
-      if not Assigned(JsonBody) then
+    try
+      //***************************************
+      //* JWT CONTEXT
+      //***************************************
+      if not TryGetJwtContext(
+        Req,
+        LJwtContext
+      ) then
       begin
-        Res.Status(400);
-        Res.Send(
-          '{"success":false,"message":"JSON inválido."}'
+        THttpResponseUtils.SendError(
+          Res,
+          401,
+          'Contexto de autenticação não encontrado.'
         );
+
         Exit;
       end;
 
-      // ---------------------------------------------------------
-      // Valores padrão
-      // ---------------------------------------------------------
-      LegalName := '';
-      TradeName := '';
-      TaxId := '';
-      StateRegistration := '';
-      MunicipalRegistration := '';
+      //***************************************
+      //* BODY
+      //***************************************
+      LJsonBody :=
+        TJSONObject.ParseJSONValue(
+          Req.Body
+        ) as TJSONObject;
 
-      Email := '';
-      Phone := '';
-      MobilePhone := '';
-      WebsiteUrl := '';
-      LogoUrl := '';
-
-      Timezone := '';
-      CurrencyCode := '';
-      LocaleCode := '';
-      Status := '';
-
-      IsMaster := False;
-
-      // ---------------------------------------------------------
-      // legal_name
-      // ---------------------------------------------------------
-      JsonValue := JsonBody.GetValue('legal_name');
-
-      if Assigned(JsonValue) and
-         not (JsonValue is TJSONNull) then
-        LegalName := JsonValue.Value;
-
-      // ---------------------------------------------------------
-      // trade_name
-      // ---------------------------------------------------------
-      JsonValue := JsonBody.GetValue('trade_name');
-
-      if Assigned(JsonValue) and
-         not (JsonValue is TJSONNull) then
-        TradeName := JsonValue.Value;
-
-      // ---------------------------------------------------------
-      // tax_id
-      // ---------------------------------------------------------
-      JsonValue := JsonBody.GetValue('tax_id');
-
-      if Assigned(JsonValue) and
-         not (JsonValue is TJSONNull) then
-        TaxId := JsonValue.Value;
-
-      // ---------------------------------------------------------
-      // state_registration
-      // ---------------------------------------------------------
-      JsonValue := JsonBody.GetValue('state_registration');
-
-      if Assigned(JsonValue) and
-         not (JsonValue is TJSONNull) then
-        StateRegistration := JsonValue.Value;
-
-      // ---------------------------------------------------------
-      // municipal_registration
-      // ---------------------------------------------------------
-      JsonValue := JsonBody.GetValue('municipal_registration');
-
-      if Assigned(JsonValue) and
-         not (JsonValue is TJSONNull) then
-        MunicipalRegistration := JsonValue.Value;
-
-      // ---------------------------------------------------------
-      // email
-      // ---------------------------------------------------------
-      JsonValue := JsonBody.GetValue('email');
-
-      if Assigned(JsonValue) and
-         not (JsonValue is TJSONNull) then
-        Email := JsonValue.Value;
-
-      // ---------------------------------------------------------
-      // phone
-      // ---------------------------------------------------------
-      JsonValue := JsonBody.GetValue('phone');
-
-      if Assigned(JsonValue) and
-         not (JsonValue is TJSONNull) then
-        Phone := JsonValue.Value;
-
-      // ---------------------------------------------------------
-      // mobile_phone
-      // ---------------------------------------------------------
-      JsonValue := JsonBody.GetValue('mobile_phone');
-
-      if Assigned(JsonValue) and
-         not (JsonValue is TJSONNull) then
-        MobilePhone := JsonValue.Value;
-
-      // ---------------------------------------------------------
-      // website_url
-      // ---------------------------------------------------------
-      JsonValue := JsonBody.GetValue('website_url');
-
-      if Assigned(JsonValue) and
-         not (JsonValue is TJSONNull) then
-        WebsiteUrl := JsonValue.Value;
-
-      // ---------------------------------------------------------
-      // logo_url
-      // ---------------------------------------------------------
-      JsonValue := JsonBody.GetValue('logo_url');
-
-      if Assigned(JsonValue) and
-         not (JsonValue is TJSONNull) then
-        LogoUrl := JsonValue.Value;
-
-      // ---------------------------------------------------------
-      // timezone
-      // ---------------------------------------------------------
-      JsonValue := JsonBody.GetValue('timezone');
-
-      if Assigned(JsonValue) and
-         not (JsonValue is TJSONNull) then
-        Timezone := JsonValue.Value;
-
-      // ---------------------------------------------------------
-      // currency_code
-      // ---------------------------------------------------------
-      JsonValue := JsonBody.GetValue('currency_code');
-
-      if Assigned(JsonValue) and
-         not (JsonValue is TJSONNull) then
-        CurrencyCode := JsonValue.Value;
-
-      // ---------------------------------------------------------
-      // locale_code
-      // ---------------------------------------------------------
-      JsonValue := JsonBody.GetValue('locale_code');
-
-      if Assigned(JsonValue) and
-         not (JsonValue is TJSONNull) then
-        LocaleCode := JsonValue.Value;
-
-      // ---------------------------------------------------------
-      // status
-      // ---------------------------------------------------------
-      JsonValue := JsonBody.GetValue('status');
-
-      if Assigned(JsonValue) and
-         not (JsonValue is TJSONNull) then
-        Status := JsonValue.Value;
-
-      // ---------------------------------------------------------
-      // is_master
-      // ---------------------------------------------------------
-      JsonValue := JsonBody.GetValue('is_master');
-
-      if Assigned(JsonValue) and
-         not (JsonValue is TJSONNull) then
-        IsMaster := SameText(
-          JsonValue.Value,
-          'true'
+      if not Assigned(LJsonBody) then
+      begin
+        THttpResponseUtils.SendError(
+          Res,
+          400,
+          'JSON inválido.'
         );
 
-      // ---------------------------------------------------------
-      // Chama o Service
-      // ---------------------------------------------------------
-      JsonResult := TTenantService.Create(
-        LegalName,
-        TradeName,
-        TaxId,
-        StateRegistration,
-        MunicipalRegistration,
-        Email,
-        Phone,
-        MobilePhone,
-        WebsiteUrl,
-        LogoUrl,
-        Timezone,
-        CurrencyCode,
-        LocaleCode,
-        Status,
-        IsMaster,
-        ErrorMessage
+        Exit;
+      end;
+
+      //***************************************
+      //* DEFAULT VALUES
+      //***************************************
+      LLegalName := '';
+      LTradeName := '';
+      LTaxId := '';
+      LStateRegistration := '';
+      LMunicipalRegistration := '';
+
+      LEmail := '';
+      LPhone := '';
+      LMobilePhone := '';
+
+      LWebsiteUrl := '';
+      LLogoUrl := '';
+
+      LTimezone :=
+        'America/Sao_Paulo';
+
+      LCurrencyCode :=
+        'BRL';
+
+      LLocaleCode :=
+        'pt-BR';
+
+      LStatus :=
+        'ACTIVE';
+
+      //***************************************
+      //* LEGAL NAME
+      //***************************************
+      LJsonValue :=
+        LJsonBody.GetValue(
+          'legal_name'
+        );
+
+      if Assigned(LJsonValue) and
+         not (LJsonValue is TJSONNull) then
+      begin
+        LLegalName :=
+          LJsonValue.Value;
+      end;
+
+      //***************************************
+      //* TRADE NAME
+      //***************************************
+      LJsonValue :=
+        LJsonBody.GetValue(
+          'trade_name'
+        );
+
+      if Assigned(LJsonValue) and
+         not (LJsonValue is TJSONNull) then
+      begin
+        LTradeName :=
+          LJsonValue.Value;
+      end;
+
+      //***************************************
+      //* TAX ID
+      //***************************************
+      LJsonValue :=
+        LJsonBody.GetValue(
+          'tax_id'
+        );
+
+      if Assigned(LJsonValue) and
+         not (LJsonValue is TJSONNull) then
+      begin
+        LTaxId :=
+          LJsonValue.Value;
+      end;
+
+      //***************************************
+      //* STATE REGISTRATION
+      //***************************************
+      LJsonValue :=
+        LJsonBody.GetValue(
+          'state_registration'
+        );
+
+      if Assigned(LJsonValue) and
+         not (LJsonValue is TJSONNull) then
+      begin
+        LStateRegistration :=
+          LJsonValue.Value;
+      end;
+
+      //***************************************
+      //* MUNICIPAL REGISTRATION
+      //***************************************
+      LJsonValue :=
+        LJsonBody.GetValue(
+          'municipal_registration'
+        );
+
+      if Assigned(LJsonValue) and
+         not (LJsonValue is TJSONNull) then
+      begin
+        LMunicipalRegistration :=
+          LJsonValue.Value;
+      end;
+
+      //***************************************
+      //* EMAIL
+      //***************************************
+      LJsonValue :=
+        LJsonBody.GetValue(
+          'email'
+        );
+
+      if Assigned(LJsonValue) and
+         not (LJsonValue is TJSONNull) then
+      begin
+        LEmail :=
+          LJsonValue.Value;
+      end;
+
+      //***************************************
+      //* PHONE
+      //***************************************
+      LJsonValue :=
+        LJsonBody.GetValue(
+          'phone'
+        );
+
+      if Assigned(LJsonValue) and
+         not (LJsonValue is TJSONNull) then
+      begin
+        LPhone :=
+          LJsonValue.Value;
+      end;
+
+      //***************************************
+      //* MOBILE PHONE
+      //***************************************
+      LJsonValue :=
+        LJsonBody.GetValue(
+          'mobile_phone'
+        );
+
+      if Assigned(LJsonValue) and
+         not (LJsonValue is TJSONNull) then
+      begin
+        LMobilePhone :=
+          LJsonValue.Value;
+      end;
+
+      //***************************************
+      //* WEBSITE URL
+      //***************************************
+      LJsonValue :=
+        LJsonBody.GetValue(
+          'website_url'
+        );
+
+      if Assigned(LJsonValue) and
+         not (LJsonValue is TJSONNull) then
+      begin
+        LWebsiteUrl :=
+          LJsonValue.Value;
+      end;
+
+      //***************************************
+      //* LOGO URL
+      //***************************************
+      LJsonValue :=
+        LJsonBody.GetValue(
+          'logo_url'
+        );
+
+      if Assigned(LJsonValue) and
+         not (LJsonValue is TJSONNull) then
+      begin
+        LLogoUrl :=
+          LJsonValue.Value;
+      end;
+
+      //***************************************
+      //* TIMEZONE
+      //***************************************
+      LJsonValue :=
+        LJsonBody.GetValue(
+          'timezone'
+        );
+
+      if Assigned(LJsonValue) and
+         not (LJsonValue is TJSONNull) and
+         (Trim(LJsonValue.Value) <> '') then
+      begin
+        LTimezone :=
+          LJsonValue.Value;
+      end;
+
+      //***************************************
+      //* CURRENCY CODE
+      //***************************************
+      LJsonValue :=
+        LJsonBody.GetValue(
+          'currency_code'
+        );
+
+      if Assigned(LJsonValue) and
+         not (LJsonValue is TJSONNull) and
+         (Trim(LJsonValue.Value) <> '') then
+      begin
+        LCurrencyCode :=
+          LJsonValue.Value;
+      end;
+
+      //***************************************
+      //* LOCALE CODE
+      //***************************************
+      LJsonValue :=
+        LJsonBody.GetValue(
+          'locale_code'
+        );
+
+      if Assigned(LJsonValue) and
+         not (LJsonValue is TJSONNull) and
+         (Trim(LJsonValue.Value) <> '') then
+      begin
+        LLocaleCode :=
+          LJsonValue.Value;
+      end;
+
+      //***************************************
+      //* STATUS
+      //***************************************
+      LJsonValue :=
+        LJsonBody.GetValue(
+          'status'
+        );
+
+      if Assigned(LJsonValue) and
+         not (LJsonValue is TJSONNull) and
+         (Trim(LJsonValue.Value) <> '') then
+      begin
+        LStatus :=
+          LJsonValue.Value;
+      end;
+
+      //***************************************
+      //* SERVICE
+      //***************************************
+      LResult :=
+        TTenantService.Create(
+          LJwtContext.UserID,
+          LJwtContext.TenantID,
+          LJwtContext.SuperUser,
+          LJwtContext.Scope,
+          LLegalName,
+          LTradeName,
+          LTaxId,
+          LStateRegistration,
+          LMunicipalRegistration,
+          LEmail,
+          LPhone,
+          LMobilePhone,
+          LWebsiteUrl,
+          LLogoUrl,
+          LTimezone,
+          LCurrencyCode,
+          LLocaleCode,
+          LStatus,
+          LErrorMessage,
+          LForbidden
+        );
+
+      //***************************************
+      //* FORBIDDEN
+      //***************************************
+      if LForbidden then
+      begin
+        THttpResponseUtils.SendError(
+          Res,
+          403,
+          LErrorMessage
+        );
+
+        Exit;
+      end;
+
+      //***************************************
+      //* ERROR
+      //***************************************
+      if LResult = '' then
+      begin
+        THttpResponseUtils.SendError(
+          Res,
+          400,
+          LErrorMessage
+        );
+
+        Exit;
+      end;
+
+      //***************************************
+      //* SUCCESS
+      //***************************************
+      Res.Status(
+        201
       );
 
-      // ---------------------------------------------------------
-      // Erro de validação/business rule
-      // ---------------------------------------------------------
-      if ErrorMessage <> '' then
-      begin
-        Res.Status(400);
+      Res.Send(
+        LResult
+      );
 
-        Res.Send(
-          TJSONObject.Create
-            .AddPair(
-              'success',
-              TJSONFalse.Create
-            )
-            .AddPair(
-              'message',
-              ErrorMessage
-            )
-            .ToJSON
-        );
-
-        Exit;
-      end;
-
-      // ---------------------------------------------------------
-      // Sucesso
-      // ---------------------------------------------------------
-      Res.Status(201);
-      Res.Send(JsonResult);
-
-    except
-      on E: Exception do
-      begin
-        Res.Status(500);
-
-        Res.Send(
-          TJSONObject.Create
-            .AddPair(
-              'success',
-              TJSONFalse.Create
-            )
-            .AddPair(
-              'message',
-              'Erro interno ao criar tenant: ' + E.Message
-            )
-            .ToJSON
-        );
-      end;
+    finally
+      LJsonBody.Free;
     end;
 
-  finally
-    JsonBody.Free;
+  except
+    on E: Exception do
+    begin
+      THttpResponseUtils.HandleDatabaseError(
+        Res,
+        E
+      );
+    end;
   end;
 end;
 
-
-{***************************************}
-{* UPDATE }
-{***************************************}
+//***************************************
+//* UPDATE
+//***************************************
 class procedure TTenantController.Update(
   Req: THorseRequest;
-  Res: THorseResponse;
-  Next: TProc
+  Res: THorseResponse
 );
 var
-  Json: TJSONObject;
+  LJwtContext: TJwtContext;
+  LJsonBody: TJSONObject;
+  LJsonValue: TJSONValue;
 
-  TenantUuid: string;
-  LegalName: string;
-  TradeName: string;
-  TaxId: string;
-  StateRegistration: string;
-  MunicipalRegistration: string;
+  LTenantUuid: string;
 
-  Email: string;
-  Phone: string;
-  MobilePhone: string;
-  WebsiteUrl: string;
-  LogoUrl: string;
+  LLegalName: string;
+  LTradeName: string;
+  LTaxId: string;
+  LStateRegistration: string;
+  LMunicipalRegistration: string;
 
-  Timezone: string;
-  CurrencyCode: string;
-  LocaleCode: string;
-  Status: string;
+  LEmail: string;
+  LPhone: string;
+  LMobilePhone: string;
 
-  IsMaster: Boolean;
+  LWebsiteUrl: string;
+  LLogoUrl: string;
 
-  JsonResult: string;
-  ErrorMessage: string;
+  LTimezone: string;
+  LCurrencyCode: string;
+  LLocaleCode: string;
+
+  LResult: string;
+  LErrorMessage: string;
+
+  LForbidden: Boolean;
+  LValidUuid: Boolean;
 begin
-  Res.ContentType('application/json; charset=utf-8');
+  Res.ContentType(
+    'application/json; charset=utf-8'
+  );
 
-  Json := nil;
+  LJsonBody := nil;
 
   try
+
     try
-      // ---------------------------------------------------------
-      // UUID do tenant
-      // ---------------------------------------------------------
-      TenantUuid := Trim(
-        Req.Params['uuid']
+      //***************************************
+      //* UUID
+      //***************************************
+      LTenantUuid :=
+        Trim(
+          Req.Params['uuid']
+        );
+
+      if LTenantUuid = '' then
+      begin
+        THttpResponseUtils.SendError(
+          Res,
+          400,
+          'UUID do tenant não informado.'
+        );
+
+        Exit;
+      end;
+
+      //***************************************
+      //* JWT CONTEXT
+      //***************************************
+      if not TryGetJwtContext(
+        Req,
+        LJwtContext
+      ) then
+      begin
+        THttpResponseUtils.SendError(
+          Res,
+          401,
+          'Contexto de autenticação não encontrado.'
+        );
+
+        Exit;
+      end;
+
+      //***************************************
+      //* BODY
+      //***************************************
+      LJsonBody :=
+        TJSONObject.ParseJSONValue(
+          Req.Body
+        ) as TJSONObject;
+
+      if not Assigned(LJsonBody) then
+      begin
+        THttpResponseUtils.SendError(
+          Res,
+          400,
+          'JSON inválido.'
+        );
+
+        Exit;
+      end;
+
+      //***************************************
+      //* DEFAULT VALUES
+      //***************************************
+      LLegalName := '';
+      LTradeName := '';
+      LTaxId := '';
+      LStateRegistration := '';
+      LMunicipalRegistration := '';
+
+      LEmail := '';
+      LPhone := '';
+      LMobilePhone := '';
+
+      LWebsiteUrl := '';
+      LLogoUrl := '';
+
+      LTimezone := '';
+      LCurrencyCode := '';
+      LLocaleCode := '';
+
+      //***************************************
+      //* LEGAL NAME
+      //***************************************
+      LJsonValue :=
+        LJsonBody.GetValue(
+          'legal_name'
+        );
+
+      if Assigned(LJsonValue) and
+         not (LJsonValue is TJSONNull) then
+      begin
+        LLegalName :=
+          LJsonValue.Value;
+      end;
+
+      //***************************************
+      //* TRADE NAME
+      //***************************************
+      LJsonValue :=
+        LJsonBody.GetValue(
+          'trade_name'
+        );
+
+      if Assigned(LJsonValue) and
+         not (LJsonValue is TJSONNull) then
+      begin
+        LTradeName :=
+          LJsonValue.Value;
+      end;
+
+      //***************************************
+      //* TAX ID
+      //***************************************
+      LJsonValue :=
+        LJsonBody.GetValue(
+          'tax_id'
+        );
+
+      if Assigned(LJsonValue) and
+         not (LJsonValue is TJSONNull) then
+      begin
+        LTaxId :=
+          LJsonValue.Value;
+      end;
+
+      //***************************************
+      //* STATE REGISTRATION
+      //***************************************
+      LJsonValue :=
+        LJsonBody.GetValue(
+          'state_registration'
+        );
+
+      if Assigned(LJsonValue) and
+         not (LJsonValue is TJSONNull) then
+      begin
+        LStateRegistration :=
+          LJsonValue.Value;
+      end;
+
+      //***************************************
+      //* MUNICIPAL REGISTRATION
+      //***************************************
+      LJsonValue :=
+        LJsonBody.GetValue(
+          'municipal_registration'
+        );
+
+      if Assigned(LJsonValue) and
+         not (LJsonValue is TJSONNull) then
+      begin
+        LMunicipalRegistration :=
+          LJsonValue.Value;
+      end;
+
+      //***************************************
+      //* EMAIL
+      //***************************************
+      LJsonValue :=
+        LJsonBody.GetValue(
+          'email'
+        );
+
+      if Assigned(LJsonValue) and
+         not (LJsonValue is TJSONNull) then
+      begin
+        LEmail :=
+          LJsonValue.Value;
+      end;
+
+      //***************************************
+      //* PHONE
+      //***************************************
+      LJsonValue :=
+        LJsonBody.GetValue(
+          'phone'
+        );
+
+      if Assigned(LJsonValue) and
+         not (LJsonValue is TJSONNull) then
+      begin
+        LPhone :=
+          LJsonValue.Value;
+      end;
+
+      //***************************************
+      //* MOBILE PHONE
+      //***************************************
+      LJsonValue :=
+        LJsonBody.GetValue(
+          'mobile_phone'
+        );
+
+      if Assigned(LJsonValue) and
+         not (LJsonValue is TJSONNull) then
+      begin
+        LMobilePhone :=
+          LJsonValue.Value;
+      end;
+
+      //***************************************
+      //* WEBSITE URL
+      //***************************************
+      LJsonValue :=
+        LJsonBody.GetValue(
+          'website_url'
+        );
+
+      if Assigned(LJsonValue) and
+         not (LJsonValue is TJSONNull) then
+      begin
+        LWebsiteUrl :=
+          LJsonValue.Value;
+      end;
+
+      //***************************************
+      //* LOGO URL
+      //***************************************
+      LJsonValue :=
+        LJsonBody.GetValue(
+          'logo_url'
+        );
+
+      if Assigned(LJsonValue) and
+         not (LJsonValue is TJSONNull) then
+      begin
+        LLogoUrl :=
+          LJsonValue.Value;
+      end;
+
+      //***************************************
+      //* TIMEZONE
+      //***************************************
+      LJsonValue :=
+        LJsonBody.GetValue(
+          'timezone'
+        );
+
+      if Assigned(LJsonValue) and
+         not (LJsonValue is TJSONNull) then
+      begin
+        LTimezone :=
+          LJsonValue.Value;
+      end;
+
+      //***************************************
+      //* CURRENCY CODE
+      //***************************************
+      LJsonValue :=
+        LJsonBody.GetValue(
+          'currency_code'
+        );
+
+      if Assigned(LJsonValue) and
+         not (LJsonValue is TJSONNull) then
+      begin
+        LCurrencyCode :=
+          LJsonValue.Value;
+      end;
+
+      //***************************************
+      //* LOCALE CODE
+      //***************************************
+      LJsonValue :=
+        LJsonBody.GetValue(
+          'locale_code'
+        );
+
+      if Assigned(LJsonValue) and
+         not (LJsonValue is TJSONNull) then
+      begin
+        LLocaleCode :=
+          LJsonValue.Value;
+      end;
+
+      //***************************************
+      //* SERVICE
+      //***************************************
+      LResult :=
+        TTenantService.Update(
+          LJwtContext.UserID,
+          LJwtContext.SuperUser,
+          LJwtContext.Scope,
+          LTenantUuid,
+          LLegalName,
+          LTradeName,
+          LTaxId,
+          LStateRegistration,
+          LMunicipalRegistration,
+          LEmail,
+          LPhone,
+          LMobilePhone,
+          LWebsiteUrl,
+          LLogoUrl,
+          LTimezone,
+          LCurrencyCode,
+          LLocaleCode,
+          LErrorMessage,
+          LForbidden,
+          LValidUuid
+        );
+
+      //***************************************
+      //* INVALID UUID
+      //***************************************
+      if not LValidUuid then
+      begin
+        THttpResponseUtils.SendError(
+          Res,
+          400,
+          LErrorMessage
+        );
+
+        Exit;
+      end;
+
+      //***************************************
+      //* FORBIDDEN
+      //***************************************
+      if LForbidden then
+      begin
+        THttpResponseUtils.SendError(
+          Res,
+          403,
+          LErrorMessage
+        );
+
+        Exit;
+      end;
+
+      //***************************************
+      //* ERROR / NOT FOUND
+      //***************************************
+      if LResult = '' then
+      begin
+        if SameText(
+          LErrorMessage,
+          'Tenant não encontrado.'
+        ) then
+        begin
+          THttpResponseUtils.SendError(
+            Res,
+            404,
+            LErrorMessage
+          );
+        end
+        else
+        begin
+          THttpResponseUtils.SendError(
+            Res,
+            400,
+            LErrorMessage
+          );
+        end;
+
+        Exit;
+      end;
+
+      //***************************************
+      //* SUCCESS
+      //***************************************
+      Res.Status(
+        200
       );
 
-      if TenantUuid = '' then
-      begin
-        Res.Status(400);
-        Res.Send(
-          '{"success":false,"message":"UUID do tenant não informado."}'
-        );
-        Exit;
-      end;
-
-      // ---------------------------------------------------------
-      // Converte o corpo da requisição para JSON
-      // ---------------------------------------------------------
-      Json := TJSONObject.ParseJSONValue(
-        Req.Body
-      ) as TJSONObject;
-
-      if not Assigned(Json) then
-      begin
-        Res.Status(400);
-        Res.Send(
-          '{"success":false,"message":"JSON inválido."}'
-        );
-        Exit;
-      end;
-
-      // ---------------------------------------------------------
-      // Valores padrão
-      // ---------------------------------------------------------
-      LegalName := '';
-      TradeName := '';
-      TaxId := '';
-      StateRegistration := '';
-      MunicipalRegistration := '';
-
-      Email := '';
-      Phone := '';
-      MobilePhone := '';
-      WebsiteUrl := '';
-      LogoUrl := '';
-
-      Timezone := '';
-      CurrencyCode := '';
-      LocaleCode := '';
-      Status := '';
-
-      // ---------------------------------------------------------
-      // legal_name
-      // ---------------------------------------------------------
-      LegalName :=
-        Json.GetValue<string>(
-          'legal_name',
-          ''
-        );
-
-      // ---------------------------------------------------------
-      // trade_name
-      // ---------------------------------------------------------
-      TradeName :=
-        Json.GetValue<string>(
-          'trade_name',
-          ''
-        );
-
-      // ---------------------------------------------------------
-      // tax_id
-      // ---------------------------------------------------------
-      TaxId :=
-        Json.GetValue<string>(
-          'tax_id',
-          ''
-        );
-
-      // ---------------------------------------------------------
-      // state_registration
-      // ---------------------------------------------------------
-      StateRegistration :=
-        Json.GetValue<string>(
-          'state_registration',
-          ''
-        );
-
-      // ---------------------------------------------------------
-      // municipal_registration
-      // ---------------------------------------------------------
-      MunicipalRegistration :=
-        Json.GetValue<string>(
-          'municipal_registration',
-          ''
-        );
-
-      // ---------------------------------------------------------
-      // email
-      // ---------------------------------------------------------
-      Email :=
-        Json.GetValue<string>(
-          'email',
-          ''
-        );
-
-      // ---------------------------------------------------------
-      // phone
-      // ---------------------------------------------------------
-      Phone :=
-        Json.GetValue<string>(
-          'phone',
-          ''
-        );
-
-      // ---------------------------------------------------------
-      // mobile_phone
-      // ---------------------------------------------------------
-      MobilePhone :=
-        Json.GetValue<string>(
-          'mobile_phone',
-          ''
-        );
-
-      // ---------------------------------------------------------
-      // website_url
-      // ---------------------------------------------------------
-      WebsiteUrl :=
-        Json.GetValue<string>(
-          'website_url',
-          ''
-        );
-
-      // ---------------------------------------------------------
-      // logo_url
-      // ---------------------------------------------------------
-      LogoUrl :=
-        Json.GetValue<string>(
-          'logo_url',
-          ''
-        );
-
-      // ---------------------------------------------------------
-      // timezone
-      // ---------------------------------------------------------
-      Timezone :=
-        Json.GetValue<string>(
-          'timezone',
-          ''
-        );
-
-      // ---------------------------------------------------------
-      // currency_code
-      // ---------------------------------------------------------
-      CurrencyCode :=
-        Json.GetValue<string>(
-          'currency_code',
-          ''
-        );
-
-      // ---------------------------------------------------------
-      // locale_code
-      // ---------------------------------------------------------
-      LocaleCode :=
-        Json.GetValue<string>(
-          'locale_code',
-          ''
-        );
-
-      // ---------------------------------------------------------
-      // status
-      // ---------------------------------------------------------
-      Status :=
-        Json.GetValue<string>(
-          'status',
-          ''
-        );
-
-      // ---------------------------------------------------------
-      // is_master
-      // ---------------------------------------------------------
-      IsMaster :=
-        Json.GetValue<Boolean>(
-          'is_master',
-          False
-        );
-
-      // ---------------------------------------------------------
-      // Chama o Service
-      // ---------------------------------------------------------
-      JsonResult := TTenantService.Update(
-        TenantUuid,
-        LegalName,
-        TradeName,
-        TaxId,
-        StateRegistration,
-        MunicipalRegistration,
-        Email,
-        Phone,
-        MobilePhone,
-        WebsiteUrl,
-        LogoUrl,
-        Timezone,
-        CurrencyCode,
-        LocaleCode,
-        Status,
-        IsMaster,
-        ErrorMessage
+      Res.Send(
+        LResult
       );
 
-      // ---------------------------------------------------------
-      // Erro de validação/business rule
-      // ---------------------------------------------------------
-      if ErrorMessage <> '' then
-      begin
-        Res.Status(400);
-
-        Res.Send(
-          TJSONObject.Create
-            .AddPair(
-              'success',
-              TJSONFalse.Create
-            )
-            .AddPair(
-              'message',
-              ErrorMessage
-            )
-            .ToJSON
-        );
-
-        Exit;
-      end;
-
-      // ---------------------------------------------------------
-      // Tenant não encontrado
-      // ---------------------------------------------------------
-      if JsonResult = '' then
-      begin
-        Res.Status(404);
-
-        Res.Send(
-          '{"success":false,"message":"Tenant não encontrado."}'
-        );
-
-        Exit;
-      end;
-
-      // ---------------------------------------------------------
-      // Sucesso
-      // ---------------------------------------------------------
-      Res.Status(200);
-      Res.Send(JsonResult);
-
-    except
-      on E: Exception do
-      begin
-        Res.Status(500);
-
-        Res.Send(
-          TJSONObject.Create
-            .AddPair(
-              'success',
-              TJSONFalse.Create
-            )
-            .AddPair(
-              'message',
-              'Erro interno ao atualizar tenant: ' +
-              E.Message
-            )
-            .ToJSON
-        );
-      end;
+    finally
+      LJsonBody.Free;
     end;
 
-  finally
-    Json.Free;
+  except
+    on E: Exception do
+    begin
+      THttpResponseUtils.HandleDatabaseError(
+        Res,
+        E
+      );
+    end;
   end;
 end;
 
-{***************************************}
-{* DELETE }
-{***************************************}
-class procedure TTenantController.Delete(
+//***************************************
+//* CHANGE STATUS
+//***************************************
+class procedure TTenantController.ChangeStatus(
   Req: THorseRequest;
-  Res: THorseResponse;
-  Next: TProc
+  Res: THorseResponse
 );
 var
-  TenantUuid: string;
-  Deleted: Boolean;
-  ValidUuid: Boolean;
+  LJwtContext: TJwtContext;
+  LJsonBody: TJSONObject;
+  LJsonValue: TJSONValue;
+
+  LTenantUuid: string;
+  LStatus: string;
+  LErrorMessage: string;
+
+  LForbidden: Boolean;
+  LValidUuid: Boolean;
+  LSuccess: Boolean;
 begin
-  Res.ContentType('application/json; charset=utf-8');
+  Res.ContentType(
+    'application/json; charset=utf-8'
+  );
+
+  LJsonBody := nil;
 
   try
-    // ---------------------------------------------------------
-    // UUID do tenant
-    // ---------------------------------------------------------
-    TenantUuid := Trim(
+
+    try
+      //***************************************
+      //* UUID
+      //***************************************
+      LTenantUuid :=
+        Trim(
+          Req.Params['uuid']
+        );
+
+      if LTenantUuid = '' then
+      begin
+        THttpResponseUtils.SendError(
+          Res,
+          400,
+          'UUID do tenant não informado.'
+        );
+
+        Exit;
+      end;
+
+      //***************************************
+      //* JWT CONTEXT
+      //***************************************
+      if not TryGetJwtContext(
+        Req,
+        LJwtContext
+      ) then
+      begin
+        THttpResponseUtils.SendError(
+          Res,
+          401,
+          'Contexto de autenticação não encontrado.'
+        );
+
+        Exit;
+      end;
+
+      //***************************************
+      //* BODY
+      //***************************************
+      LJsonBody :=
+        TJSONObject.ParseJSONValue(
+          Req.Body
+        ) as TJSONObject;
+
+      if not Assigned(LJsonBody) then
+      begin
+        THttpResponseUtils.SendError(
+          Res,
+          400,
+          'JSON inválido.'
+        );
+
+        Exit;
+      end;
+
+      //***************************************
+      //* STATUS
+      //***************************************
+      LJsonValue :=
+        LJsonBody.GetValue(
+          'status'
+        );
+
+      if not Assigned(LJsonValue) or
+         (LJsonValue is TJSONNull) then
+      begin
+        THttpResponseUtils.SendError(
+          Res,
+          400,
+          'Status do tenant não informado.'
+        );
+
+        Exit;
+      end;
+
+      LStatus :=
+        Trim(
+          LJsonValue.Value
+        );
+
+      if LStatus = '' then
+      begin
+        THttpResponseUtils.SendError(
+          Res,
+          400,
+          'Status do tenant não informado.'
+        );
+
+        Exit;
+      end;
+
+      //***************************************
+      //* SERVICE
+      //***************************************
+      LSuccess :=
+        TTenantService.ChangeStatus(
+          LJwtContext.UserID,
+          LJwtContext.SuperUser,
+          LJwtContext.Scope,
+          LTenantUuid,
+          LStatus,
+          LErrorMessage,
+          LForbidden,
+          LValidUuid
+        );
+
+      //***************************************
+      //* INVALID UUID
+      //***************************************
+      if not LValidUuid then
+      begin
+        THttpResponseUtils.SendError(
+          Res,
+          400,
+          LErrorMessage
+        );
+
+        Exit;
+      end;
+
+      //***************************************
+      //* FORBIDDEN
+      //***************************************
+      if LForbidden then
+      begin
+        THttpResponseUtils.SendError(
+          Res,
+          403,
+          LErrorMessage
+        );
+
+        Exit;
+      end;
+
+      //***************************************
+      //* ERROR / NOT FOUND
+      //***************************************
+      if not LSuccess then
+      begin
+        if SameText(
+          LErrorMessage,
+          'Tenant não encontrado.'
+        ) then
+        begin
+          THttpResponseUtils.SendError(
+            Res,
+            404,
+            LErrorMessage
+          );
+        end
+        else
+        begin
+          THttpResponseUtils.SendError(
+            Res,
+            400,
+            LErrorMessage
+          );
+        end;
+
+        Exit;
+      end;
+
+      //***************************************
+      //* SUCCESS
+      //***************************************
+      THttpResponseUtils.SendSuccess(
+        Res,
+        200,
+        'Status do tenant alterado com sucesso.'
+      );
+
+    finally
+      LJsonBody.Free;
+    end;
+
+  except
+    on E: Exception do
+    begin
+      THttpResponseUtils.HandleDatabaseError(
+        Res,
+        E
+      );
+    end;
+  end;
+end;
+
+//***************************************
+//* DELETE
+//***************************************
+class procedure TTenantController.Delete(
+  Req: THorseRequest;
+  Res: THorseResponse
+);
+var
+  LJwtContext: TJwtContext;
+
+  LTenantUuid: string;
+  LErrorMessage: string;
+
+  LForbidden: Boolean;
+  LValidUuid: Boolean;
+  LSuccess: Boolean;
+begin
+  Res.ContentType(
+    'application/json; charset=utf-8'
+  );
+
+  LTenantUuid :=
+    Trim(
       Req.Params['uuid']
     );
 
-    if TenantUuid = '' then
-    begin
-      Res.Status(400);
-
-      Res.Send(
-        '{"success":false,"message":"UUID do tenant não informado."}'
-      );
-
-      Exit;
-    end;
-
-    // ---------------------------------------------------------
-    // Chama o Service
-    // ---------------------------------------------------------
-    Deleted := TTenantService.Delete(
-      TenantUuid,
-      ValidUuid
+  if LTenantUuid = '' then
+  begin
+    THttpResponseUtils.SendError(
+      Res,
+      400,
+      'UUID do tenant não informado.'
     );
 
-    // ---------------------------------------------------------
-    // UUID inválido
-    // ---------------------------------------------------------
-    if not ValidUuid then
-    begin
-      Res.Status(400);
+    Exit;
+  end;
 
-      Res.Send(
-        '{"success":false,"message":"UUID do tenant inválido."}'
+  //***************************************
+  //* JWT CONTEXT
+  //***************************************
+  if not TryGetJwtContext(
+    Req,
+    LJwtContext
+  ) then
+  begin
+    THttpResponseUtils.SendError(
+      Res,
+      401,
+      'Contexto de autenticação não encontrado.'
+    );
+
+    Exit;
+  end;
+
+  //***************************************
+  //* SERVICE
+  //***************************************
+  try
+    LSuccess :=
+      TTenantService.Delete(
+        LJwtContext.UserID,
+        LJwtContext.SuperUser,
+        LJwtContext.Scope,
+        LTenantUuid,
+        LErrorMessage,
+        LForbidden,
+        LValidUuid
+      );
+
+    if not LValidUuid then
+    begin
+      THttpResponseUtils.SendError(
+        Res,
+        400,
+        LErrorMessage
       );
 
       Exit;
     end;
 
-    // ---------------------------------------------------------
-    // Tenant não encontrado ou não pode ser excluído
-    // ---------------------------------------------------------
-    if not Deleted then
+    if LForbidden then
     begin
-      Res.Status(404);
-
-      Res.Send(
-        '{"success":false,"message":"Tenant não encontrado ou não pode ser excluído."}'
+      THttpResponseUtils.SendError(
+        Res,
+        403,
+        LErrorMessage
       );
 
       Exit;
     end;
 
-    // ---------------------------------------------------------
-    // Sucesso
-    // ---------------------------------------------------------
-    Res.Status(200);
+    if not LSuccess then
+    begin
+      if SameText(
+        LErrorMessage,
+        'Tenant não encontrado.'
+      ) then
+        THttpResponseUtils.SendError(
+          Res,
+          404,
+          LErrorMessage
+        )
+      else
+        THttpResponseUtils.SendError(
+          Res,
+          400,
+          LErrorMessage
+        );
 
-    Res.Send(
-      TJSONObject.Create
-        .AddPair(
-          'success',
-          TJSONTrue.Create
-        )
-        .AddPair(
-          'message',
-          'Tenant excluído com sucesso.'
-        )
-        .ToJSON
+      Exit;
+    end;
+
+    THttpResponseUtils.SendSuccess(
+      Res,
+      200,
+      'Tenant excluído com sucesso.'
+    );
+
+  except
+    on E: Exception do
+      THttpResponseUtils.HandleDatabaseError(
+        Res,
+        E
+      );
+  end;
+end;
+
+//***************************************
+//* HARD DELETE
+//***************************************
+class procedure TTenantController.HardDelete(
+  Req: THorseRequest;
+  Res: THorseResponse
+);
+var
+  LJwtContext: TJwtContext;
+
+  LTenantUuid: string;
+  LErrorMessage: string;
+
+  LForbidden: Boolean;
+  LValidUuid: Boolean;
+  LHasDependencies: Boolean;
+  LSuccess: Boolean;
+begin
+  Res.ContentType(
+    'application/json; charset=utf-8'
+  );
+
+  LTenantUuid :=
+    Trim(
+      Req.Params['uuid']
+    );
+
+  if LTenantUuid = '' then
+  begin
+    THttpResponseUtils.SendError(
+      Res,
+      400,
+      'UUID do tenant não informado.'
+    );
+
+    Exit;
+  end;
+
+  //***************************************
+  //* JWT CONTEXT
+  //***************************************
+  if not TryGetJwtContext(
+    Req,
+    LJwtContext
+  ) then
+  begin
+    THttpResponseUtils.SendError(
+      Res,
+      401,
+      'Contexto de autenticação não encontrado.'
+    );
+
+    Exit;
+  end;
+
+  //***************************************
+  //* SERVICE
+  //***************************************
+  try
+    LSuccess :=
+      TTenantService.HardDelete(
+        LJwtContext.UserID,
+        LJwtContext.SuperUser,
+        LJwtContext.Scope,
+        LTenantUuid,
+        LErrorMessage,
+        LForbidden,
+        LValidUuid,
+        LHasDependencies
+      );
+
+    //***************************************
+    //* INVALID UUID
+    //***************************************
+    if not LValidUuid then
+    begin
+      THttpResponseUtils.SendError(
+        Res,
+        400,
+        LErrorMessage
+      );
+
+      Exit;
+    end;
+
+    //***************************************
+    //* FORBIDDEN
+    //***************************************
+    if LForbidden then
+    begin
+      THttpResponseUtils.SendError(
+        Res,
+        403,
+        LErrorMessage
+      );
+
+      Exit;
+    end;
+
+    //***************************************
+    //* ERROR
+    //***************************************
+    if not LSuccess then
+    begin
+      if SameText(
+        LErrorMessage,
+        'Tenant não encontrado.'
+      ) then
+      begin
+        THttpResponseUtils.SendError(
+          Res,
+          404,
+          LErrorMessage
+        );
+      end
+      else if LHasDependencies then
+      begin
+        THttpResponseUtils.SendError(
+          Res,
+          409,
+          LErrorMessage
+        );
+      end
+      else
+      begin
+        THttpResponseUtils.SendError(
+          Res,
+          400,
+          LErrorMessage
+        );
+      end;
+
+      Exit;
+    end;
+
+    //***************************************
+    //* SUCCESS
+    //***************************************
+    THttpResponseUtils.SendSuccess(
+      Res,
+      200,
+      'Tenant excluído definitivamente com sucesso.'
     );
 
   except
     on E: Exception do
     begin
-      Res.Status(500);
-
-      Res.Send(
-        TJSONObject.Create
-          .AddPair(
-            'success',
-            TJSONFalse.Create
-          )
-          .AddPair(
-            'message',
-            'Erro interno ao excluir tenant: ' +
-            E.Message
-          )
-          .ToJSON
+      THttpResponseUtils.HandleDatabaseError(
+        Res,
+        E
       );
     end;
   end;
 end;
+
 
 end.

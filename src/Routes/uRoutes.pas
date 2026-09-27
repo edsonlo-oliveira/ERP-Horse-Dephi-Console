@@ -53,7 +53,9 @@ begin
   THorse.Get('/api/v1/tenants/:uuid', TTenantController.GetByUuid);
   THorse.Post('/api/v1/tenants', TTenantController.Create);
   THorse.Put('/api/v1/tenants/:uuid', TTenantController.Update);
+  THorse.Patch('/api/v1/tenants/:uuid/status', TTenantController.ChangeStatus);
   THorse.Delete('/api/v1/tenants/:uuid', TTenantController.Delete);
+  THorse.Delete('/api/v1/tenants/:uuid/permanent', TTenantController.HardDelete);
 
   //***************************************
   //* USERS

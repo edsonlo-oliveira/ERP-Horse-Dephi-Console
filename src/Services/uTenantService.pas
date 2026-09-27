@@ -4,15 +4,47 @@ interface
 
 type
   TTenantService = class
+  private
+    class function HasGlobalAccess(
+      const ASuperUser: Boolean;
+      const AScope: string
+    ): Boolean;
+
+    class function IsValidUuid(
+      const AValue: string
+    ): Boolean;
+
+    class function IsValidStatus(
+      const AStatus: string
+    ): Boolean;
+
   public
-    class function List: string;
+    class function List(
+      const ASuperUser: Boolean;
+      const AScope: string;
+      const ASearch: string;
+      const APage: Integer;
+      const APageSize: Integer;
+      const ASortField: string;
+      const ASortDirection: string;
+      out AErrorMessage: string;
+      out AForbidden: Boolean
+    ): string;
 
     class function GetByUuid(
+      const ASuperUser: Boolean;
+      const AScope: string;
       const ATenantUuid: string;
+      out AErrorMessage: string;
+      out AForbidden: Boolean;
       out AValidUuid: Boolean
     ): string;
 
     class function Create(
+      const AUserID: Int64;
+      const AAuditTenantID: Int64;
+      const ASuperUser: Boolean;
+      const AScope: string;
       const ALegalName: string;
       const ATradeName: string;
       const ATaxId: string;
@@ -27,11 +59,14 @@ type
       const ACurrencyCode: string;
       const ALocaleCode: string;
       const AStatus: string;
-      const AIsMaster: Boolean;
-      out AErrorMessage: string
+      out AErrorMessage: string;
+      out AForbidden: Boolean
     ): string;
 
     class function Update(
+      const AUserID: Int64;
+      const ASuperUser: Boolean;
+      const AScope: string;
       const ATenantUuid: string;
       const ALegalName: string;
       const ATradeName: string;
@@ -46,14 +81,41 @@ type
       const ATimezone: string;
       const ACurrencyCode: string;
       const ALocaleCode: string;
-      const AStatus: string;
-      const AIsMaster: Boolean;
-      out AErrorMessage: string
+      out AErrorMessage: string;
+      out AForbidden: Boolean;
+      out AValidUuid: Boolean
     ): string;
 
-    class function Delete(
+    class function ChangeStatus(
+      const AUserID: Int64;
+      const ASuperUser: Boolean;
+      const AScope: string;
       const ATenantUuid: string;
+      const AStatus: string;
+      out AErrorMessage: string;
+      out AForbidden: Boolean;
       out AValidUuid: Boolean
+    ): Boolean;
+
+    class function Delete(
+      const AUserID: Int64;
+      const ASuperUser: Boolean;
+      const AScope: string;
+      const ATenantUuid: string;
+      out AErrorMessage: string;
+      out AForbidden: Boolean;
+      out AValidUuid: Boolean
+    ): Boolean;
+
+    class function HardDelete(
+      const AUserID: Int64;
+      const ASuperUser: Boolean;
+      const AScope: string;
+      const ATenantUuid: string;
+      out AErrorMessage: string;
+      out AForbidden: Boolean;
+      out AValidUuid: Boolean;
+      out AHasDependencies: Boolean
     ): Boolean;
   end;
 
@@ -61,412 +123,832 @@ implementation
 
 uses
   System.SysUtils,
+  System.RegularExpressions,
   uTenantRepository;
 
-{***************************************}
-{* LIST }
-{***************************************}
-class function TTenantService.List: string;
+
+//***************************************
+//* HAS GLOBAL ACCESS
+//***************************************
+class function TTenantService.HasGlobalAccess(
+  const ASuperUser: Boolean;
+  const AScope: string
+): Boolean;
 begin
-  Result := TTenantRepository.List;
+  Result :=
+    ASuperUser and
+    SameText(
+      Trim(AScope),
+      'GLOBAL'
+    );
 end;
 
-{***************************************}
-{* GETBYUUID }
-{***************************************}
+
+//***************************************
+//* IS VALID UUID
+//***************************************
+class function TTenantService.IsValidUuid(
+  const AValue: string
+): Boolean;
+var
+  LValue: string;
+begin
+  LValue :=
+    Trim(AValue);
+
+  LValue :=
+    StringReplace(
+      LValue,
+      '{',
+      '',
+      [rfReplaceAll]
+    );
+
+  LValue :=
+    StringReplace(
+      LValue,
+      '}',
+      '',
+      [rfReplaceAll]
+    );
+
+  Result :=
+    TRegEx.IsMatch(
+      LValue,
+      '^[0-9a-fA-F]{8}-' +
+      '[0-9a-fA-F]{4}-' +
+      '[0-9a-fA-F]{4}-' +
+      '[0-9a-fA-F]{4}-' +
+      '[0-9a-fA-F]{12}$'
+    );
+end;
+
+
+//***************************************
+//* IS VALID STATUS
+//***************************************
+class function TTenantService.IsValidStatus(
+  const AStatus: string
+): Boolean;
+var
+  LStatus: string;
+begin
+  LStatus :=
+    UpperCase(
+      Trim(AStatus)
+    );
+
+  Result :=
+    (LStatus = 'ACTIVE') or
+    (LStatus = 'INACTIVE') or
+    (LStatus = 'SUSPENDED');
+end;
+
+
+//***************************************
+//* LIST
+//***************************************
+class function TTenantService.List(
+  const ASuperUser: Boolean;
+  const AScope: string;
+  const ASearch: string;
+  const APage: Integer;
+  const APageSize: Integer;
+  const ASortField: string;
+  const ASortDirection: string;
+  out AErrorMessage: string;
+  out AForbidden: Boolean
+): string;
+begin
+  Result := '';
+  AErrorMessage := '';
+  AForbidden := False;
+
+  //***************************************
+  //* AUTORIZAÇÃO
+  //***************************************
+  if not HasGlobalAccess(
+    ASuperUser,
+    AScope
+  ) then
+  begin
+    AForbidden := True;
+    AErrorMessage :=
+      'Usuário não possui permissão para acessar tenants.';
+
+    Exit;
+  end;
+
+  Result :=
+    TTenantRepository.List(
+      Trim(ASearch),
+      APage,
+      APageSize,
+      Trim(ASortField),
+      Trim(ASortDirection)
+    );
+end;
+
+
+//***************************************
+//* GET BY UUID
+//***************************************
 class function TTenantService.GetByUuid(
+  const ASuperUser: Boolean;
+  const AScope: string;
   const ATenantUuid: string;
+  out AErrorMessage: string;
+  out AForbidden: Boolean;
+  out AValidUuid: Boolean
+): string;
+begin
+  Result := '';
+  AErrorMessage := '';
+  AForbidden := False;
+
+  AValidUuid :=
+    IsValidUuid(
+      ATenantUuid
+    );
+
+  if not AValidUuid then
+  begin
+    AErrorMessage :=
+      'UUID do tenant inválido.';
+
+    Exit;
+  end;
+
+  //***************************************
+  //* AUTORIZAÇÃO
+  //***************************************
+  if not HasGlobalAccess(
+    ASuperUser,
+    AScope
+  ) then
+  begin
+    AForbidden := True;
+    AErrorMessage :=
+      'Usuário não possui permissão para acessar tenants.';
+
+    Exit;
+  end;
+
+  Result :=
+    TTenantRepository.GetByUuid(
+      ATenantUuid,
+      False
+    );
+
+  if Result = '' then
+    AErrorMessage :=
+      'Tenant não encontrado.';
+end;
+
+
+//***************************************
+//* CREATE
+//***************************************
+class function TTenantService.Create(
+  const AUserID: Int64;
+  const AAuditTenantID: Int64;
+  const ASuperUser: Boolean;
+  const AScope: string;
+  const ALegalName: string;
+  const ATradeName: string;
+  const ATaxId: string;
+  const AStateRegistration: string;
+  const AMunicipalRegistration: string;
+  const AEmail: string;
+  const APhone: string;
+  const AMobilePhone: string;
+  const AWebsiteUrl: string;
+  const ALogoUrl: string;
+  const ATimezone: string;
+  const ACurrencyCode: string;
+  const ALocaleCode: string;
+  const AStatus: string;
+  out AErrorMessage: string;
+  out AForbidden: Boolean
+): string;
+var
+  LLegalName: string;
+  LTaxId: string;
+  LTimezone: string;
+  LCurrencyCode: string;
+  LLocaleCode: string;
+  LStatus: string;
+begin
+  Result := '';
+  AErrorMessage := '';
+  AForbidden := False;
+
+  //***************************************
+  //* AUTORIZAÇÃO
+  //***************************************
+  if not HasGlobalAccess(
+    ASuperUser,
+    AScope
+  ) then
+  begin
+    AForbidden := True;
+    AErrorMessage :=
+      'Usuário não possui permissão para criar tenants.';
+
+    Exit;
+  end;
+
+  //***************************************
+  //* NORMALIZAÇÃO
+  //***************************************
+  LLegalName :=
+    Trim(ALegalName);
+
+  LTaxId :=
+    Trim(ATaxId);
+
+  LTimezone :=
+    Trim(ATimezone);
+
+  LCurrencyCode :=
+    UpperCase(
+      Trim(ACurrencyCode)
+    );
+
+  LLocaleCode :=
+    Trim(ALocaleCode);
+
+  LStatus :=
+    UpperCase(
+      Trim(AStatus)
+    );
+
+  //***************************************
+  //* VALIDAÇÕES
+  //***************************************
+  if LLegalName = '' then
+  begin
+    AErrorMessage :=
+      'Razão social é obrigatória.';
+
+    Exit;
+  end;
+
+  if LTaxId = '' then
+  begin
+    AErrorMessage :=
+      'CNPJ/CPF é obrigatório.';
+
+    Exit;
+  end;
+
+  if LTimezone = '' then
+  begin
+    AErrorMessage :=
+      'Timezone é obrigatório.';
+
+    Exit;
+  end;
+
+  if LCurrencyCode = '' then
+  begin
+    AErrorMessage :=
+      'Código da moeda é obrigatório.';
+
+    Exit;
+  end;
+
+  if Length(LCurrencyCode) <> 3 then
+  begin
+    AErrorMessage :=
+      'Código da moeda deve possuir 3 caracteres.';
+
+    Exit;
+  end;
+
+  if LLocaleCode = '' then
+  begin
+    AErrorMessage :=
+      'Locale é obrigatório.';
+
+    Exit;
+  end;
+
+  if not IsValidStatus(
+    LStatus
+  ) then
+  begin
+    AErrorMessage :=
+      'Status do tenant inválido.';
+
+    Exit;
+  end;
+
+  if TTenantRepository.TaxIdExists(
+    LTaxId
+  ) then
+  begin
+    AErrorMessage :=
+      'Já existe um tenant cadastrado com este CNPJ/CPF.';
+
+    Exit;
+  end;
+
+  Result :=
+    TTenantRepository.Create(
+      AUserID,
+      AAuditTenantID,
+      LLegalName,
+      Trim(ATradeName),
+      LTaxId,
+      Trim(AStateRegistration),
+      Trim(AMunicipalRegistration),
+      Trim(AEmail),
+      Trim(APhone),
+      Trim(AMobilePhone),
+      Trim(AWebsiteUrl),
+      Trim(ALogoUrl),
+      LTimezone,
+      LCurrencyCode,
+      LLocaleCode,
+      LStatus
+    );
+end;
+
+
+//***************************************
+//* UPDATE
+//***************************************
+class function TTenantService.Update(
+  const AUserID: Int64;
+  const ASuperUser: Boolean;
+  const AScope: string;
+  const ATenantUuid: string;
+  const ALegalName: string;
+  const ATradeName: string;
+  const ATaxId: string;
+  const AStateRegistration: string;
+  const AMunicipalRegistration: string;
+  const AEmail: string;
+  const APhone: string;
+  const AMobilePhone: string;
+  const AWebsiteUrl: string;
+  const ALogoUrl: string;
+  const ATimezone: string;
+  const ACurrencyCode: string;
+  const ALocaleCode: string;
+  out AErrorMessage: string;
+  out AForbidden: Boolean;
   out AValidUuid: Boolean
 ): string;
 var
-  UUID: TGUID;
-  NormalizedUuid: string;
-begin
-  AValidUuid := False;
-  Result := '';
-
-  NormalizedUuid := Trim(ATenantUuid);
-
-  if NormalizedUuid = '' then
-    Exit;
-
-  if (NormalizedUuid[1] <> '{') then
-    NormalizedUuid := '{' + NormalizedUuid + '}';
-
-  try
-    UUID := StringToGUID(NormalizedUuid);
-    AValidUuid := True;
-  except
-    on E: EConvertError do
-      Exit;
-  end;
-
-  Result := TTenantRepository.GetByUuid(
-    GUIDToString(UUID)
-  );
-end;
-
-{***************************************}
-{* CREATE }
-{***************************************}
-class function TTenantService.Create(
-  const ALegalName: string;
-  const ATradeName: string;
-  const ATaxId: string;
-  const AStateRegistration: string;
-  const AMunicipalRegistration: string;
-  const AEmail: string;
-  const APhone: string;
-  const AMobilePhone: string;
-  const AWebsiteUrl: string;
-  const ALogoUrl: string;
-  const ATimezone: string;
-  const ACurrencyCode: string;
-  const ALocaleCode: string;
-  const AStatus: string;
-  const AIsMaster: Boolean;
-  out AErrorMessage: string
-): string;
-var
-  LegalName: string;
-  TaxId: string;
-  Timezone: string;
-  CurrencyCode: string;
-  LocaleCode: string;
-  Status: string;
+  LLegalName: string;
+  LTaxId: string;
+  LTimezone: string;
+  LCurrencyCode: string;
+  LLocaleCode: string;
 begin
   Result := '';
   AErrorMessage := '';
+  AForbidden := False;
 
-  LegalName := Trim(ALegalName);
-  TaxId := Trim(ATaxId);
-  Timezone := Trim(ATimezone);
-  CurrencyCode := UpperCase(Trim(ACurrencyCode));
-  LocaleCode := Trim(ALocaleCode);
-  Status := UpperCase(Trim(AStatus));
+  AValidUuid :=
+    IsValidUuid(
+      ATenantUuid
+    );
 
-  {---------------------------------------}
-  {* Campos obrigatórios }
-  {---------------------------------------}
-
-  if LegalName = '' then
+  if not AValidUuid then
   begin
     AErrorMessage :=
-      'legal_name é obrigatório.';
+      'UUID do tenant inválido.';
+
     Exit;
   end;
 
-  if TaxId = '' then
+  //***************************************
+  //* AUTORIZAÇÃO
+  //***************************************
+  if not HasGlobalAccess(
+    ASuperUser,
+    AScope
+  ) then
   begin
+    AForbidden := True;
     AErrorMessage :=
-      'tax_id é obrigatório.';
+      'Usuário não possui permissão para alterar tenants.';
+
     Exit;
   end;
 
-  {---------------------------------------}
-  {* Valores padrão }
-  {---------------------------------------}
-
-  if Timezone = '' then
-    Timezone := 'America/Sao_Paulo';
-
-  if CurrencyCode = '' then
-    CurrencyCode := 'BRL';
-
-  if LocaleCode = '' then
-    LocaleCode := 'pt-BR';
-
-  if Status = '' then
-    Status := 'ACTIVE';
-
-  {---------------------------------------}
-  {* Validação de status }
-  {---------------------------------------}
-
-  if (Status <> 'ACTIVE') and
-     (Status <> 'INACTIVE') and
-     (Status <> 'SUSPENDED') then
+  if not TTenantRepository.Exists(
+    ATenantUuid,
+    False
+  ) then
   begin
     AErrorMessage :=
-      'status deve ser ACTIVE, INACTIVE ou SUSPENDED.';
+      'Tenant não encontrado.';
+
     Exit;
   end;
 
-  {---------------------------------------}
-  {* Validação de tax_id duplicado }
-  {---------------------------------------}
+  // MASTER pode ter seus dados cadastrais
+  // alterados. is_master e status não são
+  // modificados por este método.
+
+  LLegalName :=
+    Trim(ALegalName);
+
+  LTaxId :=
+    Trim(ATaxId);
+
+  LTimezone :=
+    Trim(ATimezone);
+
+  LCurrencyCode :=
+    UpperCase(
+      Trim(ACurrencyCode)
+    );
+
+  LLocaleCode :=
+    Trim(ALocaleCode);
+
+  if LLegalName = '' then
+  begin
+    AErrorMessage :=
+      'Razão social é obrigatória.';
+
+    Exit;
+  end;
+
+  if LTaxId = '' then
+  begin
+    AErrorMessage :=
+      'CNPJ/CPF é obrigatório.';
+
+    Exit;
+  end;
+
+  if LTimezone = '' then
+  begin
+    AErrorMessage :=
+      'Timezone é obrigatório.';
+
+    Exit;
+  end;
+
+  if LCurrencyCode = '' then
+  begin
+    AErrorMessage :=
+      'Código da moeda é obrigatório.';
+
+    Exit;
+  end;
+
+  if Length(LCurrencyCode) <> 3 then
+  begin
+    AErrorMessage :=
+      'Código da moeda deve possuir 3 caracteres.';
+
+    Exit;
+  end;
+
+  if LLocaleCode = '' then
+  begin
+    AErrorMessage :=
+      'Locale é obrigatório.';
+
+    Exit;
+  end;
 
   if TTenantRepository.TaxIdExists(
-       TaxId,
-       ''
-     ) then
+    LTaxId,
+    ATenantUuid
+  ) then
   begin
     AErrorMessage :=
-      'O tax_id informado já está cadastrado em outro tenant.';
+      'Já existe outro tenant cadastrado com este CNPJ/CPF.';
+
     Exit;
   end;
 
-  {---------------------------------------}
-  {* Validação de tenant MASTER }
-  {---------------------------------------}
+  Result :=
+    TTenantRepository.Update(
+      AUserID,
+      ATenantUuid,
+      LLegalName,
+      Trim(ATradeName),
+      LTaxId,
+      Trim(AStateRegistration),
+      Trim(AMunicipalRegistration),
+      Trim(AEmail),
+      Trim(APhone),
+      Trim(AMobilePhone),
+      Trim(AWebsiteUrl),
+      Trim(ALogoUrl),
+      LTimezone,
+      LCurrencyCode,
+      LLocaleCode
+    );
 
-  if AIsMaster and
-     TTenantRepository.MasterExists('') then
-  begin
+  if Result = '' then
     AErrorMessage :=
-      'Já existe um tenant MASTER. Não é possível criar outro tenant MASTER.';
-    Exit;
-  end;
-
-  {---------------------------------------}
-  {* Persistência }
-  {---------------------------------------}
-
-  Result := TTenantRepository.Create(
-    LegalName,
-    Trim(ATradeName),
-    TaxId,
-    Trim(AStateRegistration),
-    Trim(AMunicipalRegistration),
-    Trim(AEmail),
-    Trim(APhone),
-    Trim(AMobilePhone),
-    Trim(AWebsiteUrl),
-    Trim(ALogoUrl),
-    Timezone,
-    CurrencyCode,
-    LocaleCode,
-    Status,
-    AIsMaster
-  );
+      'Tenant não encontrado.';
 end;
 
-{***************************************}
-{* UPDATE }
-{***************************************}
-class function TTenantService.Update(
+
+//***************************************
+//* CHANGE STATUS
+//***************************************
+class function TTenantService.ChangeStatus(
+  const AUserID: Int64;
+  const ASuperUser: Boolean;
+  const AScope: string;
   const ATenantUuid: string;
-  const ALegalName: string;
-  const ATradeName: string;
-  const ATaxId: string;
-  const AStateRegistration: string;
-  const AMunicipalRegistration: string;
-  const AEmail: string;
-  const APhone: string;
-  const AMobilePhone: string;
-  const AWebsiteUrl: string;
-  const ALogoUrl: string;
-  const ATimezone: string;
-  const ACurrencyCode: string;
-  const ALocaleCode: string;
   const AStatus: string;
-  const AIsMaster: Boolean;
-  out AErrorMessage: string
-): string;
-var
-  UUID: TGUID;
-  NormalizedUuid: string;
-
-  LegalName: string;
-  TradeName: string;
-  TaxId: string;
-  StateRegistration: string;
-  MunicipalRegistration: string;
-  Email: string;
-  Phone: string;
-  MobilePhone: string;
-  WebsiteUrl: string;
-  LogoUrl: string;
-  Timezone: string;
-  CurrencyCode: string;
-  LocaleCode: string;
-  Status: string;
-begin
-  Result := '';
-  AErrorMessage := '';
-
-  {---------------------------------------}
-  {* Validação e normalização do UUID }
-  {---------------------------------------}
-
-  NormalizedUuid := Trim(ATenantUuid);
-
-  if NormalizedUuid = '' then
-  begin
-    AErrorMessage :=
-      'UUID do tenant é obrigatório.';
-    Exit;
-  end;
-
-  if (NormalizedUuid[1] <> '{') then
-    NormalizedUuid := '{' + NormalizedUuid + '}';
-
-  try
-    UUID := StringToGUID(NormalizedUuid);
-  except
-    on E: EConvertError do
-    begin
-      AErrorMessage :=
-        'UUID do tenant inválido.';
-      Exit;
-    end;
-  end;
-
-  NormalizedUuid := GUIDToString(UUID);
-
-  {---------------------------------------}
-  {* Normalização dos campos }
-  {---------------------------------------}
-
-  LegalName := Trim(ALegalName);
-  TradeName := Trim(ATradeName);
-  TaxId := Trim(ATaxId);
-  StateRegistration := Trim(AStateRegistration);
-  MunicipalRegistration := Trim(AMunicipalRegistration);
-  Email := Trim(AEmail);
-  Phone := Trim(APhone);
-  MobilePhone := Trim(AMobilePhone);
-  WebsiteUrl := Trim(AWebsiteUrl);
-  LogoUrl := Trim(ALogoUrl);
-  Timezone := Trim(ATimezone);
-  CurrencyCode := UpperCase(Trim(ACurrencyCode));
-  LocaleCode := Trim(ALocaleCode);
-  Status := UpperCase(Trim(AStatus));
-
-  {---------------------------------------}
-  {* Campos obrigatórios }
-  {---------------------------------------}
-
-  if LegalName = '' then
-  begin
-    AErrorMessage :=
-      'legal_name é obrigatório.';
-    Exit;
-  end;
-
-  if TaxId = '' then
-  begin
-    AErrorMessage :=
-      'tax_id é obrigatório.';
-    Exit;
-  end;
-
-  {---------------------------------------}
-  {* Valores padrão }
-  {---------------------------------------}
-
-  if Timezone = '' then
-    Timezone := 'America/Sao_Paulo';
-
-  if CurrencyCode = '' then
-    CurrencyCode := 'BRL';
-
-  if LocaleCode = '' then
-    LocaleCode := 'pt-BR';
-
-  if Status = '' then
-    Status := 'ACTIVE';
-
-  {---------------------------------------}
-  {* Validação de status }
-  {---------------------------------------}
-
-  if (Status <> 'ACTIVE') and
-     (Status <> 'INACTIVE') and
-     (Status <> 'SUSPENDED') then
-  begin
-    AErrorMessage :=
-      'status deve ser ACTIVE, INACTIVE ou SUSPENDED.';
-    Exit;
-  end;
-
-  {---------------------------------------}
-  {* Validação de tax_id duplicado }
-  {---------------------------------------}
-
-  if TTenantRepository.TaxIdExists(
-       TaxId,
-       NormalizedUuid
-     ) then
-  begin
-    AErrorMessage :=
-      'O tax_id informado já está cadastrado em outro tenant.';
-    Exit;
-  end;
-
-  {---------------------------------------}
-  {* Validação de tenant MASTER }
-  {---------------------------------------}
-
-  if AIsMaster and
-     TTenantRepository.MasterExists(
-       NormalizedUuid
-     ) then
-  begin
-    AErrorMessage :=
-      'Já existe outro tenant MASTER. Não é possível definir este tenant como MASTER.';
-    Exit;
-  end;
-
-  {---------------------------------------}
-  {* Persistência }
-  {---------------------------------------}
-
-  Result := TTenantRepository.Update(
-    NormalizedUuid,
-    LegalName,
-    TradeName,
-    TaxId,
-    StateRegistration,
-    MunicipalRegistration,
-    Email,
-    Phone,
-    MobilePhone,
-    WebsiteUrl,
-    LogoUrl,
-    Timezone,
-    CurrencyCode,
-    LocaleCode,
-    Status,
-    AIsMaster
-  );
-end;
-
-{***************************************}
-{* DELETE }
-{***************************************}
-class function TTenantService.Delete(
-  const ATenantUuid: string;
+  out AErrorMessage: string;
+  out AForbidden: Boolean;
   out AValidUuid: Boolean
 ): Boolean;
 var
-  UUID: TGUID;
-  NormalizedUuid: string;
+  LStatus: string;
 begin
   Result := False;
-  AValidUuid := False;
+  AErrorMessage := '';
+  AForbidden := False;
 
-  NormalizedUuid := Trim(ATenantUuid);
+  AValidUuid :=
+    IsValidUuid(
+      ATenantUuid
+    );
 
-  if NormalizedUuid = '' then
+  if not AValidUuid then
+  begin
+    AErrorMessage :=
+      'UUID do tenant inválido.';
+
     Exit;
-
-  if (NormalizedUuid[1] <> '{') then
-    NormalizedUuid := '{' + NormalizedUuid + '}';
-
-  try
-    UUID := StringToGUID(NormalizedUuid);
-    AValidUuid := True;
-  except
-    on E: EConvertError do
-      Exit;
   end;
 
-  NormalizedUuid := GUIDToString(UUID);
+  //***************************************
+  //* AUTORIZAÇÃO
+  //***************************************
+  if not HasGlobalAccess(
+    ASuperUser,
+    AScope
+  ) then
+  begin
+    AForbidden := True;
+    AErrorMessage :=
+      'Usuário não possui permissão para alterar o status de tenants.';
 
-  Result := TTenantRepository.Delete(
-    NormalizedUuid
-  );
+    Exit;
+  end;
+
+  if not TTenantRepository.Exists(
+    ATenantUuid,
+    False
+  ) then
+  begin
+    AErrorMessage :=
+      'Tenant não encontrado.';
+
+    Exit;
+  end;
+
+  //***************************************
+  //* MASTER
+  //***************************************
+  if TTenantRepository.IsMaster(
+    ATenantUuid
+  ) then
+  begin
+    AErrorMessage :=
+      'O tenant MASTER não pode ter seu status alterado.';
+
+    Exit;
+  end;
+
+  LStatus :=
+    UpperCase(
+      Trim(AStatus)
+    );
+
+  if not IsValidStatus(
+    LStatus
+  ) then
+  begin
+    AErrorMessage :=
+      'Status do tenant inválido.';
+
+    Exit;
+  end;
+
+  Result :=
+    TTenantRepository.ChangeStatus(
+      AUserID,
+      ATenantUuid,
+      LStatus
+    );
+
+  if not Result then
+    AErrorMessage :=
+      'Não foi possível alterar o status do tenant.';
+end;
+
+
+//***************************************
+//* DELETE
+//***************************************
+class function TTenantService.Delete(
+  const AUserID: Int64;
+  const ASuperUser: Boolean;
+  const AScope: string;
+  const ATenantUuid: string;
+  out AErrorMessage: string;
+  out AForbidden: Boolean;
+  out AValidUuid: Boolean
+): Boolean;
+begin
+  Result := False;
+  AErrorMessage := '';
+  AForbidden := False;
+
+  AValidUuid :=
+    IsValidUuid(
+      ATenantUuid
+    );
+
+  if not AValidUuid then
+  begin
+    AErrorMessage :=
+      'UUID do tenant inválido.';
+
+    Exit;
+  end;
+
+  //***************************************
+  //* AUTORIZAÇÃO
+  //***************************************
+  if not HasGlobalAccess(
+    ASuperUser,
+    AScope
+  ) then
+  begin
+    AForbidden := True;
+    AErrorMessage :=
+      'Usuário não possui permissão para excluir tenants.';
+
+    Exit;
+  end;
+
+  if not TTenantRepository.Exists(
+    ATenantUuid,
+    False
+  ) then
+  begin
+    AErrorMessage :=
+      'Tenant não encontrado.';
+
+    Exit;
+  end;
+
+  //***************************************
+  //* MASTER
+  //***************************************
+  if TTenantRepository.IsMaster(
+    ATenantUuid
+  ) then
+  begin
+    AErrorMessage :=
+      'O tenant MASTER não pode ser excluído.';
+
+    Exit;
+  end;
+
+  Result :=
+    TTenantRepository.Delete(
+      AUserID,
+      ATenantUuid
+    );
+
+  if not Result then
+    AErrorMessage :=
+      'Não foi possível excluir o tenant.';
+end;
+
+
+//***************************************
+//* HARD DELETE
+//***************************************
+class function TTenantService.HardDelete(
+  const AUserID: Int64;
+  const ASuperUser: Boolean;
+  const AScope: string;
+  const ATenantUuid: string;
+  out AErrorMessage: string;
+  out AForbidden: Boolean;
+  out AValidUuid: Boolean;
+  out AHasDependencies: Boolean
+): Boolean;
+var
+  LActiveExists: Boolean;
+  LAnyExists: Boolean;
+begin
+  Result := False;
+  AErrorMessage := '';
+  AForbidden := False;
+  AHasDependencies := False;
+
+  AValidUuid :=
+    IsValidUuid(
+      ATenantUuid
+    );
+
+  if not AValidUuid then
+  begin
+    AErrorMessage :=
+      'UUID do tenant inválido.';
+
+    Exit;
+  end;
+
+  //***************************************
+  //* AUTORIZAÇÃO
+  //***************************************
+  if not HasGlobalAccess(
+    ASuperUser,
+    AScope
+  ) then
+  begin
+    AForbidden := True;
+    AErrorMessage :=
+      'Usuário não possui permissão para excluir definitivamente tenants.';
+
+    Exit;
+  end;
+
+  LAnyExists :=
+    TTenantRepository.Exists(
+      ATenantUuid,
+      True
+    );
+
+  if not LAnyExists then
+  begin
+    AErrorMessage :=
+      'Tenant não encontrado.';
+
+    Exit;
+  end;
+
+  //***************************************
+  //* MASTER
+  //***************************************
+  if TTenantRepository.IsMaster(
+    ATenantUuid
+  ) then
+  begin
+    AErrorMessage :=
+      'O tenant MASTER não pode ser excluído definitivamente.';
+
+    Exit;
+  end;
+
+  //***************************************
+  //* SOFT DELETE OBRIGATÓRIO
+  //***************************************
+  LActiveExists :=
+    TTenantRepository.Exists(
+      ATenantUuid,
+      False
+    );
+
+  if LActiveExists then
+  begin
+    AErrorMessage :=
+      'O tenant deve ser excluído logicamente antes da exclusão definitiva.';
+
+    Exit;
+  end;
+
+  Result :=
+    TTenantRepository.HardDelete(
+      AUserID,
+      ATenantUuid,
+      AHasDependencies
+    );
+
+  if AHasDependencies then
+  begin
+    AErrorMessage :=
+      'O tenant possui registros relacionados e não pode ser excluído definitivamente.';
+
+    Exit;
+  end;
+
+  if not Result then
+    AErrorMessage :=
+      'Não foi possível excluir definitivamente o tenant.';
 end;
 
 end.
