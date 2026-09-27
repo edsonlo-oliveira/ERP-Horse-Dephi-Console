@@ -1,0 +1,833 @@
+# ERP BACKEND STANDARDS
+
+**Projeto:** ERP Delphi  
+**Backend:** Delphi + Horse + PostgreSQL  
+**Versão:** 2.2  
+**Status da documentação:** Setembro/2026
+
+---
+
+## 1. Objetivo deste documento
+
+Este documento registra o padrão atual do backend do ERP e define como os próximos módulos deverão ser desenvolvidos.
+
+A fonte de verdade continua sendo o código-fonte atual. Esta documentação serve como guia de arquitetura e desenvolvimento, e deve ser atualizada conforme novas regras forem confirmadas durante a implementação dos módulos no cliente FireMonkey.
+
+Não devemos antecipar regras ou refatorações de módulos que ainda não chegaram à etapa de implementação no FMX.
+
+---
+
+## 2. Estratégia de desenvolvimento
+
+O desenvolvimento seguirá o fluxo:
+
+1. iniciar ou evoluir a interface do módulo no cliente FMX;
+2. definir as regras funcionais necessárias para aquele módulo;
+3. verificar se o backend correspondente já existe;
+4. se existir, revisar e ajustar Controller, Service e Repository conforme as regras confirmadas;
+5. se não existir, criar o backend seguindo os padrões documentados;
+6. compilar e testar incrementalmente;
+7. executar os testes funcionais juntamente com a implementação do módulo no cliente;
+8. atualizar esta documentação quando uma nova regra se tornar padrão do projeto.
+
+### Regra importante
+
+Não fazer grandes refatorações preventivas em módulos ainda não utilizados pelo cliente.
+
+Uma regra existente pode mudar quando a interface, permissões e fluxo real do módulo forem definidos.
+
+---
+
+## 3. Módulos implementados de ponta a ponta
+
+Atualmente os módulos efetivamente implementados e utilizados dos dois lados são:
+
+- **Entities**
+- **Product Categories**
+
+Esses módulos são as principais referências para novos cadastros operacionais.
+
+O backend de **Tenant** foi revisado, concluído e validado funcionalmente. O backend de **Tenant Addresses** também foi implementado e validado funcionalmente. O módulo **User** possui implementação existente, mas continuará sujeito a nova revisão quando seu módulo FMX for desenvolvido.
+
+---
+
+## 4. Arquitetura padrão do backend
+
+Um módulo de negócio normalmente é dividido em três camadas:
+
+```text
+Controller
+    ↓
+Service
+    ↓
+Repository
+    ↓
+PostgreSQL
+```
+
+### Controller
+
+Responsável por:
+
+- receber a requisição HTTP;
+- recuperar contexto JWT;
+- ler parâmetros da URL, query string e JSON;
+- validar estrutura básica da requisição;
+- chamar o Service;
+- definir o status HTTP;
+- devolver JSON ao cliente.
+
+O Controller não deve conter SQL nem regra complexa de negócio.
+
+### Service
+
+Responsável por:
+
+- regras de negócio;
+- regras de acesso entre tenants;
+- validações funcionais;
+- resolução do tenant efetivo;
+- normalização de dados quando necessário;
+- coordenação das operações do Repository.
+
+### Repository
+
+Responsável por:
+
+- acesso ao PostgreSQL;
+- SQL;
+- parâmetros FireDAC;
+- transações;
+- retorno de dados;
+- aplicação do contexto de auditoria antes de operações graváveis;
+- uso dos helpers compartilhados de banco quando o problema já estiver centralizado na infraestrutura.
+
+#### Strings opcionais em parâmetros FireDAC
+
+Campos string opcionais não devem repetir lógica local para decidir entre valor e `NULL`.
+
+O padrão vigente é usar:
+
+```delphi
+TDatabaseUtils.SetOptionalString(
+  AQuery,
+  'param_name',
+  AValue
+);
+```
+
+A implementação compartilhada deve definir explicitamente o tipo do parâmetro como `ftString` antes de limpar ou atribuir o valor. Isso evita erros do PostgreSQL/FireDAC quando um parâmetro opcional é enviado vazio e seu tipo não pode ser inferido.
+
+Exemplo do problema que motivou a centralização:
+
+```text
+[FireDAC][Phys][PG]-335.Parameter[...] datatype is unknown
+```
+
+**Regra:** não recriar `SetOptionalString` dentro de Repositories. Utilizar `uDatabaseUtils`.
+
+#### Tipagem forte em assinaturas da interface
+
+Quando um método declarado na `interface` utiliza tipos concretos do FireDAC ou JSON, esses tipos devem aparecer diretamente na assinatura e suas units devem ser incluídas no `uses` da própria `interface`.
+
+Exemplo recomendado:
+
+```delphi
+uses
+  System.JSON,
+  FireDAC.Comp.Client;
+
+class function AddressToJson(
+  const AQuery: TFDQuery
+): TJSONObject; static;
+```
+
+Não substituir `TFDQuery`, `TJSONObject` ou outros tipos concretos por `TObject` apenas para evitar dependências no `interface`. Isso cria casts desnecessários, enfraquece o contrato da classe e pode introduzir erros de tipo em tempo de execução.
+
+**Regra:** preferir assinaturas fortemente tipadas e declarar explicitamente as units necessárias no `uses` da `interface`.
+
+---
+
+## 5. Multi-tenant
+
+A regra conceitual do sistema é:
+
+### SuperUser
+
+- existe somente no tenant MASTER;
+- possui alcance global;
+- pode operar sobre diferentes tenants quando a operação permitir;
+- o alcance global é determinado por `SuperUser`, e não pelo simples fato de o usuário estar no tenant MASTER.
+
+### Usuário normal / Administrador de tenant
+
+- pertence a um tenant;
+- opera somente dentro do próprio tenant;
+- permissões específicas serão definidas posteriormente.
+
+### Tenant MASTER
+
+O tenant MASTER determina onde um usuário `super_user = true` pode existir.
+
+Ele não deve ser usado isoladamente como mecanismo de autorização global.
+
+Resumo:
+
+```text
+SuperUser
+→ controla alcance global
+
+Tenant MASTER
+→ controla onde SuperUser pode existir
+```
+
+---
+
+## 6. JWT e contexto da requisição
+
+Os Controllers protegidos devem trabalhar com o contexto JWT disponibilizado pela requisição.
+
+O contexto atual contém informações como:
+
+- UserID;
+- UserUuid;
+- TenantID;
+- LoginID;
+- SuperUser;
+- Scope.
+
+O padrão utilizado é recuperar esse contexto através de `TryGetJwtContext`.
+
+A autenticação global continua sendo responsabilidade do middleware JWT.
+
+---
+
+## 7. Scope
+
+O projeto utiliza os conceitos:
+
+```text
+GLOBAL
+TENANT
+```
+
+Em módulos já existentes há verificações equivalentes a:
+
+```delphi
+ASuperUser and SameText(Trim(AScope), 'GLOBAL')
+```
+
+Esse conceito é válido, mas a lógica de resolução do tenant não deve ser duplicada desnecessariamente em todos os futuros módulos.
+
+Quando novos módulos exigirem seleção explícita de tenant por SuperUser, utilizar o padrão já aplicado em Product Categories como referência.
+
+---
+
+## 8. Entities
+
+O módulo Entity é referência principalmente para:
+
+- paginação;
+- pesquisa;
+- ordenação;
+- CRUD;
+- ativação/inativação;
+- soft delete;
+- hard delete;
+- tratamento de dependências;
+- acesso GLOBAL/TENANT;
+- integração com auditoria.
+
+O Service recebe o contexto da sessão e converte SuperUser + Scope em alcance global quando apropriado.
+
+O Repository mantém o filtro de tenant e `deleted_at` conforme a operação.
+
+---
+
+## 9. Product Categories
+
+O módulo Product Categories é referência principalmente para:
+
+- hierarquia;
+- resolução do tenant efetivo;
+- UUID;
+- validação de nome;
+- parent category;
+- regras de descendência;
+- impedir estruturas inválidas;
+- soft delete;
+- hard delete;
+- ativação/inativação.
+
+O Service possui helpers privados específicos do próprio domínio, como:
+
+- resolução de tenant;
+- validação de nome;
+- validação de UUID;
+- resolução do ID da categoria;
+- resolução da categoria pai.
+
+Esse padrão é considerado bom: lógica específica do domínio deve permanecer dentro do módulo.
+
+---
+
+## 10. Auditoria
+
+O contexto de auditoria foi centralizado em `uAuditContext`.
+
+Repositories que realizam alterações no banco devem configurar o contexto antes de operações auditáveis.
+
+Não recriar localmente a lógica de configuração de auditoria em cada Repository.
+
+---
+
+## 11. Tratamento de erros e logs
+
+Controllers devem diferenciar, conforme aplicável:
+
+- `400` — requisição inválida ou regra de negócio;
+- `401` — autenticação/contexto não disponível;
+- `403` — autenticado sem permissão;
+- `404` — recurso não encontrado;
+- `409` — conflito, como tentativa de exclusão definitiva de registro com dependências;
+- `201` — criação realizada;
+- `200` — consulta/alteração realizada;
+- `500` — erro interno inesperado.
+
+O padrão exato deve seguir a necessidade real de cada módulo.
+
+### 11.1 Regra obrigatória para exceptions técnicas
+
+Mensagens técnicas de exceção, incluindo mensagens do FireDAC, PostgreSQL, SQL, constraints ou detalhes internos, **não devem ser devolvidas diretamente ao cliente**.
+
+É proibido utilizar em resposta HTTP:
+
+```delphi
+E.Message
+```
+
+quando a exceção puder conter detalhes internos da infraestrutura.
+
+O fluxo padrão é:
+
+```text
+Exception
+   ↓
+TDatabaseErrorHandler.Handle(E)
+   ├─ HttpStatus
+   ├─ UserMessage  → resposta HTTP sanitizada
+   └─ Details      → log técnico
+```
+
+### 11.2 `uDatabaseErrorHandler`
+
+`TDatabaseErrorHandler.Handle` é responsável por classificar a exceção e devolver `TDatabaseErrorInfo`, contendo:
+
+```text
+UserMessage
+Details
+HttpStatus
+```
+
+`UserMessage` é a mensagem permitida para o cliente.
+
+`Details` contém o detalhe técnico para diagnóstico e pode incluir a mensagem original do FireDAC/PostgreSQL.
+
+O handler já possui tratamento específico para erros conhecidos, como:
+
+- violação de UNIQUE / SQLSTATE `23505`;
+- violação de FOREIGN KEY / SQLSTATE `23503`;
+- NOT NULL / SQLSTATE `23502`;
+- CHECK / SQLSTATE `23514`;
+- falta de permissão / SQLSTATE `42501`;
+- indisponibilidade/conexão com banco;
+- erro de sintaxe SQL / SQLSTATE `42601`;
+- fallback genérico para erro interno.
+
+### 11.3 `uServerLogger`
+
+O log técnico da aplicação é responsabilidade de `uServerLogger`.
+
+Interface atual:
+
+```delphi
+TServerLogger.Error(const AMessage: string);
+TServerLogger.Info(const AMessage: string);
+```
+
+Os arquivos são gravados em:
+
+```text
+logs\ERPServer-Application-YYYY-MM-DD.log
+```
+
+Detalhes técnicos, inclusive mensagens do FireDAC, são permitidos nesse arquivo porque ele é destinado ao diagnóstico do servidor.
+
+### 11.4 `uFileLoggerProvider`
+
+O projeto possui também o provider de log integrado ao Horse. Sua responsabilidade é diferente do `uServerLogger`: registrar tráfego HTTP do servidor, com sanitização das informações sensíveis configuradas pelo projeto.
+
+Os dois logs não devem ser confundidos:
+
+```text
+uFileLoggerProvider
+→ tráfego HTTP / Horse
+
+uServerLogger
+→ eventos e erros internos da aplicação
+```
+
+### 11.5 `uHttpResponseUtils`
+
+`THttpResponseUtils` é um helper compartilhado já adotado pelo backend. Ele centraliza respostas HTTP comuns e o tratamento de exceptions técnicas.
+
+Responsabilidades atuais:
+
+```text
+SendError
+SendSuccess
+HandleDatabaseError
+```
+
+O padrão para exceptions nos Controllers é:
+
+```delphi
+except
+  on E: Exception do
+  begin
+    THttpResponseUtils.HandleDatabaseError(
+      Res,
+      E
+    );
+  end;
+end;
+```
+
+`HandleDatabaseError` deve:
+
+1. chamar `TDatabaseErrorHandler.Handle(E)`;
+2. registrar `LErrorInfo.Details` com `TServerLogger.Error`;
+3. devolver apenas `LErrorInfo.UserMessage` ao cliente usando o `HttpStatus` retornado.
+
+Resultado esperado:
+
+```text
+Cliente
+→ mensagem amigável e sanitizada
+
+ERPServer-Application-YYYY-MM-DD.log
+→ detalhe técnico completo para diagnóstico
+```
+
+### 11.6 JSON com `try/finally` e `try/except`
+
+Controllers que criam um `TJSONObject` a partir de `Req.Body` devem garantir simultaneamente:
+
+- liberação do objeto JSON;
+- tratamento centralizado da exceção.
+
+Padrão:
+
+```delphi
+LJsonBody := nil;
+
+try
+  try
+    LJsonBody :=
+      TJSONObject.ParseJSONValue(
+        Req.Body
+      ) as TJSONObject;
+
+    // operação
+
+  finally
+    LJsonBody.Free;
+  end;
+
+except
+  on E: Exception do
+  begin
+    THttpResponseUtils.HandleDatabaseError(
+      Res,
+      E
+    );
+  end;
+end;
+```
+
+Não remover o `finally` para adicionar o `except`; os dois têm responsabilidades diferentes.
+
+---
+
+## 12. Avaliação de duplicações atuais
+
+Foi feita uma revisão comparativa dos módulos Entity e Product Categories.
+
+### Services
+
+**Situação:** suficientemente enxutos.
+
+Os helpers encontrados são majoritariamente específicos do domínio e estão corretamente mantidos dentro de cada Service.
+
+Não há benefício claro, neste momento, em criar uma classe base de Services.
+
+### Repositories
+
+**Situação:** suficientemente enxutos.
+
+Existe repetição estrutural inevitável relacionada a:
+
+- criação de queries;
+- configuração de parâmetros;
+- transações;
+- contexto de auditoria;
+- conversão de registros para JSON.
+
+Grande parte dessa repetição é própria do SQL e do formato de cada entidade.
+
+Criar agora um Repository genérico aumentaria a abstração e provavelmente dificultaria manutenção.
+
+**Decisão:** não criar Repository base/genérico neste momento.
+
+### Controllers
+
+É onde existe a maior repetição real.
+
+Padrões repetidos incluem:
+
+- `TryGetJwtContext`;
+- resposta de erro 401;
+- criação de JSON `{ success, message }`;
+- respostas 400/404/500;
+- leitura e validação de UUID;
+- em alguns módulos, leitura de `tenant_id`.
+
+Product Categories já possui um helper privado `SendError`, mostrando que essa centralização é útil.
+
+### Helpers compartilhados confirmados
+
+O módulo Tenant confirmou repetição suficiente para consolidar helpers de infraestrutura.
+
+#### `TDatabaseUtils`
+
+Uso obrigatório para comportamentos de banco já centralizados, incluindo:
+
+```text
+SetOptionalString
+```
+
+#### `THttpResponseUtils`
+
+Já implementado e utilizado para:
+
+```text
+SendError
+SendSuccess
+HandleDatabaseError
+```
+
+Esses helpers não devem ser recriados localmente em novos Controllers ou Repositories.
+
+### Candidatos futuros a helper compartilhado
+
+Sem implementação obrigatória agora:
+
+#### `TRequestContextUtils`
+
+Possível responsabilidade:
+
+```text
+obter JWT context
+validar contexto
+resolver operações comuns de tenant
+```
+
+#### `TTenantAccessUtils`
+
+Possível responsabilidade futura:
+
+```text
+IsGlobalScope
+ResolveEffectiveTenant
+ValidateTenantAccess
+```
+
+Esses helpers só devem ser criados quando um terceiro módulo confirmar que a repetição realmente se mantém.
+
+---
+
+## 13. Decisão sobre refatoração agora
+
+**Não haverá uma refatoração geral do backend neste momento.**
+
+A arquitetura atual de Entity e Product Categories está suficientemente organizada para continuar o projeto.
+
+A prioridade é evitar abstrações prematuras.
+
+A partir do próximo módulo, sempre observar:
+
+```text
+Se o mesmo bloco aparecer pela terceira vez
+→ avaliar helper compartilhado.
+
+Se a regra pertencer somente ao domínio
+→ manter no próprio Service/Repository.
+```
+
+---
+
+## 14. User — status
+
+O backend de User já possui implementação, mas não será considerado definitivamente fechado até o módulo FMX ser desenvolvido.
+
+Já foi corrigida a distinção arquitetural entre:
+
+```text
+SuperUser = alcance global
+Tenant MASTER = local permitido para existência de SuperUser
+```
+
+Também foi adicionada a regra:
+
+```text
+somente SuperUser pode criar outro SuperUser
+```
+
+### Pendências para a implementação do User no FMX
+
+- testes funcionais completos;
+- revisão das validações de Create e Update;
+- definição das permissões de Administrador de tenant;
+- definição das permissões de Usuário de tenant;
+- revisão de regras específicas de alteração/exclusão de SuperUser;
+- eventuais helpers internos somente se forem úteis naquele momento.
+
+---
+
+## 15. Tenant — backend concluído
+
+O backend do módulo **Tenant** está concluído e funcionalmente validado.
+
+### 15.1 Regras de acesso confirmadas
+
+- somente usuário com `SuperUser = true` e `Scope = GLOBAL` pode executar operações do módulo Tenant;
+- usuários sem acesso global não podem listar, consultar, criar, alterar, mudar status ou excluir tenants;
+- `tenant_uuid` é o identificador externo utilizado pela API;
+- `tenant_id` permanece como identificador interno do banco e pode ser utilizado entre camadas internas quando apropriado.
+
+### 15.2 Tenant MASTER
+
+O tenant MASTER possui proteção especial:
+
+- pode ser consultado;
+- pode ter dados cadastrais comuns alterados por `PUT`;
+- não pode ter seu status alterado;
+- não pode sofrer soft delete;
+- não pode sofrer hard delete;
+- `is_master` não é alterável pelas operações normais de Create/Update.
+
+A regra foi validada funcionalmente. A tentativa de alterar o status do MASTER retorna erro de regra de negócio, sem executar a alteração.
+
+### 15.3 Operações validadas
+
+Foram testados com sucesso:
+
+```text
+POST   /api/v1/tenants
+→ 201 Created
+
+PUT    /api/v1/tenants/:uuid
+→ 200 OK
+
+PATCH  /api/v1/tenants/:uuid/status
+→ 200 OK para tenant comum
+→ bloqueado para tenant MASTER
+
+DELETE /api/v1/tenants/:uuid
+→ soft delete
+→ 200 OK
+
+GET    /api/v1/tenants/:uuid após soft delete
+→ 404 Not Found
+
+DELETE /api/v1/tenants/:uuid/permanent
+→ 200 OK quando não existem dependências
+→ 409 Conflict quando existem dependências
+```
+
+Também foram validados:
+
+- persistência da alteração de status;
+- atualização de campos opcionais;
+- `deleted_at` no soft delete;
+- remoção física no hard delete sem dependências;
+- bloqueio de hard delete quando existem registros relacionados;
+- resposta HTTP sanitizada em erros de banco;
+- ausência de mensagens FireDAC/PostgreSQL na resposta ao cliente.
+
+### 15.4 Status e exclusão
+
+Os estados aceitos pelo Tenant são:
+
+```text
+ACTIVE
+INACTIVE
+SUSPENDED
+```
+
+O status é independente de `deleted_at`. O soft delete não altera automaticamente o status do tenant.
+
+O hard delete somente é permitido depois do soft delete. Caso o tenant ainda esteja ativo no sentido lógico (`deleted_at IS NULL`), a API rejeita a exclusão definitiva.
+
+Quando o PostgreSQL impede o hard delete por relacionamento de chave estrangeira, a API retorna `409 Conflict` com mensagem amigável, sem expor detalhes técnicos.
+
+### 15.5 Endereços de Tenant — backend concluído
+
+O backend de **Tenant Addresses** foi implementado e validado funcionalmente.
+
+A tabela `core.tenant_addresses` utiliza:
+
+- `tenant_address_id` como identificador interno;
+- `tenant_address_uuid` como identificador externo utilizado pela API;
+- `tenant_id` como relacionamento interno com `core.tenants`;
+- exclusão física, pois a tabela não possui `deleted_at`;
+- auditoria através de `core.audit_trigger('tenant_address_id')`.
+
+As APIs utilizam `tenant_uuid` para identificar o Tenant e `tenant_address_uuid` para identificar o endereço. IDs numéricos permanecem internos ao backend/banco.
+
+#### Regras de acesso
+
+- somente usuário com `SuperUser = true` e `Scope = GLOBAL` pode utilizar as operações de Tenant Addresses;
+- tenants excluídos logicamente não são considerados válidos para manipulação de endereços;
+- não foi criada restrição especial para endereços do tenant MASTER além da autorização GLOBAL.
+
+#### Tipos de endereço
+
+Os tipos aceitos são:
+
+```text
+BUSINESS
+BILLING
+SHIPPING
+FISCAL
+OTHER
+```
+
+A constraint `UNIQUE (tenant_id, address_type)` garante no máximo um endereço de cada tipo por Tenant.
+
+#### Endereço principal
+
+Existe somente um endereço principal por Tenant. Quando um novo endereço é criado ou atualizado com `is_primary = true`, o Repository desmarca automaticamente o endereço principal anterior dentro da mesma transação.
+
+O banco também deve manter a proteção de unicidade parcial para um único `is_primary = true` por `tenant_id`.
+
+#### Operações validadas
+
+Foram testadas com sucesso:
+
+```text
+POST   /api/v1/tenants/:tenant_uuid/addresses
+→ 201 Created
+
+GET    /api/v1/tenants/:tenant_uuid/addresses
+→ 200 OK
+
+GET    /api/v1/tenants/:tenant_uuid/addresses/:address_uuid
+→ 200 OK
+
+PUT    /api/v1/tenants/:tenant_uuid/addresses/:address_uuid
+→ 200 OK
+
+DELETE /api/v1/tenants/:tenant_uuid/addresses/:address_uuid
+→ 200 OK
+→ exclusão física
+```
+
+Também foram validados:
+
+- geração automática de `tenant_address_uuid`;
+- retorno e consulta individual por UUID;
+- criação de múltiplos tipos de endereço;
+- troca automática do `is_primary` no Create;
+- troca automática do `is_primary` no Update;
+- preservação de `created_at` no Update;
+- atualização de `updated_at`;
+- campos opcionais usando `TDatabaseUtils.SetOptionalString`;
+- uso de `uAuditContext`;
+- tratamento centralizado de exceptions através de `THttpResponseUtils.HandleDatabaseError`;
+- exclusão física validada funcionalmente.
+
+Units implementadas:
+
+```text
+uTenantAddressRepository
+uTenantAddressService
+uTenantAddressController
+```
+
+---
+
+## 16. Referências para novos módulos
+
+Para novos módulos operacionais:
+
+### Usar Entity como referência quando houver
+
+- pesquisa;
+- paginação;
+- ordenação;
+- listagem grande;
+- soft delete;
+- hard delete;
+- ativação/inativação.
+
+### Usar Product Categories como referência quando houver
+
+- tenant explicitamente selecionável por SuperUser;
+- estruturas hierárquicas;
+- validação de relacionamentos;
+- resolução UUID → ID;
+- regras específicas de dependência entre registros.
+
+---
+
+## 17. Regra de evolução da arquitetura
+
+A arquitetura deve crescer conforme problemas reais surgirem.
+
+Evitar:
+
+- classes base sem necessidade comprovada;
+- helpers genéricos para código utilizado uma única vez;
+- antecipar permissões de módulos ainda não implementados;
+- reescrever módulos funcionais apenas para uniformizar estilo;
+- abstrair SQL específico apenas para reduzir linhas.
+
+Preferir:
+
+- código explícito;
+- regras fáceis de localizar;
+- Services com responsabilidade clara;
+- Repositories específicos;
+- helpers compartilhados apenas para repetição comprovada;
+- evolução incremental com compilação e teste a cada etapa.
+
+---
+
+## 18. Estado atual
+
+```text
+FMX + Backend funcionando:
+✓ Authentication/Login
+✓ Entities
+✓ Product Categories
+
+Backend concluído e validado funcionalmente:
+✓ Tenant
+✓ Tenant Addresses
+
+Backend existente, sujeito a revisão quando chegar ao FMX:
+◐ User
+```
+
+Esta é a versão 2.2 da documentação de padrões do backend. Ela mantém o módulo Tenant como backend concluído e acrescenta Tenant Addresses como módulo backend implementado e funcionalmente validado, usando UUID externo, exclusão física, regra de um único endereço principal, troca automática de `is_primary`, autorização `SuperUser + GLOBAL`, auditoria, helpers compartilhados e tratamento centralizado de exceptions. Também formaliza a regra de tipagem forte em assinaturas de interface, evitando substituir tipos concretos como `TFDQuery` e `TJSONObject` por `TObject`.
