@@ -46,8 +46,7 @@ uses
   System.JSON,
   uUserService,
   uJwtService,
-  uJwtRequestContext,
-  uTenantRepository;
+  uJwtRequestContext;
 
 
 //***************************************
@@ -76,7 +75,7 @@ begin
           )
           .AddPair(
             'message',
-            'Contexto de autenticaÁ„o n„o encontrado.'
+            'Contexto de autentica√ß√£o n√£o encontrado.'
           )
           .ToJSON
       );
@@ -86,7 +85,8 @@ begin
 
     LJson :=
       TUserService.List(
-        LJwtContext.TenantID
+        LJwtContext.TenantID,
+        LJwtContext.SuperUser
       );
 
     Res.Status(200).Send(
@@ -142,7 +142,7 @@ begin
           )
           .AddPair(
             'message',
-            'UUID do usu·rio È obrigatÛrio.'
+            'UUID do usu√°rio √© obrigat√≥rio.'
           )
           .ToJSON
       );
@@ -163,7 +163,7 @@ begin
           )
           .AddPair(
             'message',
-            'Contexto de autenticaÁ„o n„o encontrado.'
+            'Contexto de autentica√ß√£o n√£o encontrado.'
           )
           .ToJSON
       );
@@ -174,7 +174,8 @@ begin
     LJson :=
       TUserService.GetByUuid(
         LUuid,
-        LJwtContext.TenantID
+        LJwtContext.TenantID,
+        LJwtContext.SuperUser
       );
 
     if LJson = '' then
@@ -187,7 +188,7 @@ begin
           )
           .AddPair(
             'message',
-            'Usu·rio n„o encontrado.'
+            'Usu√°rio n√£o encontrado.'
           )
           .ToJSON
       );
@@ -264,7 +265,7 @@ begin
             )
             .AddPair(
               'message',
-              'JSON inv·lido.'
+              'JSON inv√°lido.'
             )
             .ToJSON
         );
@@ -282,7 +283,7 @@ begin
             )
             .AddPair(
               'message',
-              'O corpo da requisiÁ„o deve ser um objeto JSON.'
+              'O corpo da requisi√ß√£o deve ser um objeto JSON.'
             )
             .ToJSON
         );
@@ -303,7 +304,7 @@ begin
             )
             .AddPair(
               'message',
-              'Contexto de autenticaÁ„o n„o encontrado.'
+              'Contexto de autentica√ß√£o n√£o encontrado.'
             )
             .ToJSON
         );
@@ -384,7 +385,7 @@ begin
             )
             .AddPair(
               'message',
-              'N„o foi possÌvel criar o usu·rio.'
+              'N√£o foi poss√≠vel criar o usu√°rio.'
             )
             .ToJSON
         );
@@ -460,7 +461,6 @@ var
   LSuperUser: Boolean;
 
   LJwtContext: TJwtContext;
-  LTenantIsMaster: Boolean;
 
   LResult: string;
 begin
@@ -483,7 +483,7 @@ begin
             )
             .AddPair(
               'message',
-              'UUID do usu·rio È obrigatÛrio.'
+              'UUID do usu√°rio √© obrigat√≥rio.'
             )
             .ToJSON
         );
@@ -506,7 +506,7 @@ begin
             )
             .AddPair(
               'message',
-              'JSON inv·lido.'
+              'JSON inv√°lido.'
             )
             .ToJSON
         );
@@ -524,7 +524,7 @@ begin
             )
             .AddPair(
               'message',
-              'O corpo da requisiÁ„o deve ser um objeto JSON.'
+              'O corpo da requisi√ß√£o deve ser um objeto JSON.'
             )
             .ToJSON
         );
@@ -545,18 +545,13 @@ begin
             )
             .AddPair(
               'message',
-              'Contexto de autenticaÁ„o n„o encontrado.'
+              'Contexto de autentica√ß√£o n√£o encontrado.'
             )
             .ToJSON
         );
 
         Exit;
       end;
-
-      LTenantIsMaster :=
-        TTenantRepository.IsMaster(
-          LJwtContext.TenantID
-        );
 
       LObject :=
         TJSONObject(LJson);
@@ -618,7 +613,7 @@ begin
           LPassword,
           LStatus,
           LSuperUser,
-          LTenantIsMaster
+          LJwtContext.SuperUser
         );
 
       if LResult = '' then
@@ -631,7 +626,7 @@ begin
             )
             .AddPair(
               'message',
-              'Usu·rio n„o encontrado.'
+              'Usu√°rio n√£o encontrado.'
             )
             .ToJSON
         );
@@ -696,7 +691,6 @@ var
   LDeleted: Boolean;
 
   LJwtContext: TJwtContext;
-  LTenantIsMaster: Boolean;
 begin
   try
     LUuid :=
@@ -714,7 +708,7 @@ begin
           )
           .AddPair(
             'message',
-            'UUID do usu·rio È obrigatÛrio.'
+            'UUID do usu√°rio √© obrigat√≥rio.'
           )
           .ToJSON
       );
@@ -735,7 +729,7 @@ begin
           )
           .AddPair(
             'message',
-            'Contexto de autenticaÁ„o n„o encontrado.'
+            'Contexto de autentica√ß√£o n√£o encontrado.'
           )
           .ToJSON
       );
@@ -743,16 +737,11 @@ begin
       Exit;
     end;
 
-    LTenantIsMaster :=
-      TTenantRepository.IsMaster(
-        LJwtContext.TenantID
-      );
-
     LDeleted :=
       TUserService.Delete(
         LJwtContext.TenantID,
         LUuid,
-        LTenantIsMaster
+        LJwtContext.SuperUser
       );
 
     if not LDeleted then
@@ -765,7 +754,7 @@ begin
           )
           .AddPair(
             'message',
-            'Usu·rio n„o encontrado.'
+            'Usu√°rio n√£o encontrado.'
           )
           .ToJSON
       );
@@ -781,7 +770,7 @@ begin
         )
         .AddPair(
           'message',
-          'Usu·rio excluÌdo com sucesso.'
+          'Usu√°rio exclu√≠do com sucesso.'
         )
         .ToJSON
     );

@@ -46,6 +46,7 @@ type
     class function GetByUuid(const ATenantUuid: string): string;
     class function Delete(const ATenantUuid: string): Boolean;
     class function MasterExists(const ATenantUuid: string): Boolean;
+    class function IsMaster(const ATenantId: Int64): Boolean;
     class function TaxIdExists(const ATaxId: string; const ATenantUuid: string): Boolean;
   end;
 
@@ -1276,4 +1277,46 @@ begin
     Connection.Free;
   end;
 end;
+
+//***************************************
+//* IS MASTER
+//***************************************
+class function TTenantRepository.IsMaster(
+  const ATenantId: Int64
+): Boolean;
+var
+  Connection: TFDConnection;
+  Query: TFDQuery;
+begin
+  Result := False;
+
+  if ATenantId <= 0 then
+    Exit;
+
+  Connection := TApiDatabase.NewConnection;
+  Query := TFDQuery.Create(nil);
+  try
+    Query.Connection := Connection;
+
+    Query.SQL.Text :=
+      'SELECT is_master ' +
+      'FROM core.tenants ' +
+      'WHERE tenant_id = :tenant_id ' +
+      '  AND deleted_at IS NULL';
+
+    Query.ParamByName('tenant_id').AsLargeInt :=
+      ATenantId;
+
+    Query.Open;
+
+    if not Query.Eof then
+      Result :=
+        Query.FieldByName('is_master').AsBoolean;
+
+  finally
+    Query.Free;
+    Connection.Free;
+  end;
+end;
+
 end.

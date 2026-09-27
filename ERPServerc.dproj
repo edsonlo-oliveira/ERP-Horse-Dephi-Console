@@ -101,8 +101,8 @@
         <VerInfo_IncludeVerInfo>true</VerInfo_IncludeVerInfo>
         <VerInfo_Debug>true</VerInfo_Debug>
         <VerInfo_AutoIncVersion>true</VerInfo_AutoIncVersion>
-        <VerInfo_Build>64</VerInfo_Build>
-        <VerInfo_Keys>CompanyName=;FileDescription=$(MSBuildProjectName);FileVersion=1.0.0.64;InternalName=;LegalCopyright=;LegalTrademarks=;OriginalFilename=;ProgramID=com.embarcadero.$(MSBuildProjectName);ProductName=$(MSBuildProjectName);ProductVersion=1.0.0.0;Comments=</VerInfo_Keys>
+        <VerInfo_Build>66</VerInfo_Build>
+        <VerInfo_Keys>CompanyName=;FileDescription=$(MSBuildProjectName);FileVersion=1.0.0.66;InternalName=;LegalCopyright=;LegalTrademarks=;OriginalFilename=;ProgramID=com.embarcadero.$(MSBuildProjectName);ProductName=$(MSBuildProjectName);ProductVersion=1.0.0.0;Comments=</VerInfo_Keys>
     </PropertyGroup>
     <PropertyGroup Condition="'$(Cfg_2)'!=''">
         <DCC_LocalDebugSymbols>false</DCC_LocalDebugSymbols>
@@ -133,9 +133,7 @@
         <DCCReference Include="src\Controllers\uAuthController.pas"/>
         <DCCReference Include="src\Utils\uJwtConfig.pas"/>
         <DCCReference Include="src\Services\uJwtService.pas"/>
-        <DCCReference Include="src\Test\uJwtTest.pas"/>
         <DCCReference Include="src\Middleware\uJwtMiddleware.pas"/>
-        <DCCReference Include="src\Utils\uHttpAuthUtils.pas"/>
         <DCCReference Include="src\Utils\uJwtRequestContext.pas"/>
         <DCCReference Include="src\Logging\uFileLoggerProvider.pas"/>
         <DCCReference Include="src\Utils\uDatabaseErrorHandler.pas"/>

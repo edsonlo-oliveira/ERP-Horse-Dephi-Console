@@ -25,7 +25,7 @@ type
       const APassword: string;
       const AStatus: string;
       const ASuperUser: Boolean;
-      const ACurrentTenantIsMaster: Boolean
+      const ACurrentSuperUser: Boolean
     ): string;
 
     class function Update(
@@ -55,7 +55,8 @@ uses
   System.SysUtils,
   System.JSON,
   uUserRepository,
-  uPasswordUtils;
+  uPasswordUtils,
+  uTenantRepository;
 
 //***************************************
 //* LIST
@@ -104,7 +105,7 @@ class function TUserService.Create(
   const APassword: string;
   const AStatus: string;
   const ASuperUser: Boolean;
-  const ACurrentTenantIsMaster: Boolean
+  const ACurrentSuperUser: Boolean
 ): string;
 var
   LStatus: string;
@@ -164,24 +165,29 @@ begin
       'Status inválido. Valores permitidos: ACTIVE, INACTIVE ou LOCKED.'
     );
 
-  {
-    Um usuário normal só pode ser criado dentro do próprio tenant.
+    {
+      Somente SuperUser possui alcance GLOBAL.
 
-    O tenant MASTER pode administrar usuários de outros tenants.
-  }
-  if (ACurrentTenantId <> ATargetTenantId) and
-     (not ACurrentTenantIsMaster) then
-    raise Exception.Create(
-      'O usuário somente pode ser criado no próprio tenant.'
-    );
+      Administradores e usuários de tenant ficam restritos
+      ao próprio tenant.
+    }
+    if (ACurrentTenantId <> ATargetTenantId) and
+       (not ACurrentSuperUser) then
+      raise Exception.Create(
+        'O usuário somente pode ser criado no próprio tenant.'
+      );
 
-  {
-    SuperUser pertence exclusivamente ao tenant MASTER.
-  }
-  if ASuperUser and (not ACurrentTenantIsMaster) then
-    raise Exception.Create(
-      'Somente o tenant MASTER pode possuir usuários SuperUser.'
-    );
+    {
+      SuperUser pertence exclusivamente ao tenant MASTER.
+
+      A validação é feita sobre o tenant do usuário que está
+      sendo criado, e não sobre o tenant do usuário autenticado.
+    }
+    if ASuperUser and
+       (not TTenantRepository.IsMaster(ATargetTenantId)) then
+      raise Exception.Create(
+        'Usuários SuperUser somente podem pertencer ao tenant MASTER.'
+      );
 
   {
     Login é globalmente único.
