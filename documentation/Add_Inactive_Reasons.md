@@ -1,4 +1,4 @@
-#core.inactive_reasons
+# core.inactive_reasons
 
 ## INSERT
 BEGIN;
